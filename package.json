@@ -12,11 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "canvas-orbit-camera": "^1.0.2",
-    "extrude-polyline": "^1.0.6",
-    "gl-matrix": "^3.3.0",
     "leaflet": "^1.7.1",
-    "polyline-normals": "^2.0.2",
     "regl": "^2.1.0"
   },
   "devDependencies": {

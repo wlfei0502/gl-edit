@@ -2,8 +2,6 @@ import L from 'leaflet';
 import { lngLatToPoint } from '../util/util';
 import Editor from '../modules/editor';
 
-// import '../modules/demo';
-
 const { 
     Renderer, 
     DomEvent:{ on, off }, 
