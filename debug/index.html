@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="./debug/leaflet.css" />
+    <script src="./debug/leaflet-src.js"></script>
+    <script src="../dist/leaflet-draw-edit.dev.js"></script>
+    <style>
+        html, body{
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        #mapid{
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="mapid"></div>
+    <script>
+        window.process = {
+            browser: true
+        }
+        var mymap = L.map('mapid', {
+            updateWhenIdle: true
+        }).setView([40.091311, 116.28273], 11);
+        var tileLayer = L.tileLayer('https://t1.tianditu.gov.cn/DataServer?T=img_w&x={x}&y={y}&l={z}&tk=2db0ba5b3fa4414b2ea0ac2903d7519c');
+        mymap.addLayer(tileLayer);
+
+        var drawEditLayer = L.drawEdit();
+        mymap.addLayer(drawEditLayer);
+    </script>
+</body>
+</html>
