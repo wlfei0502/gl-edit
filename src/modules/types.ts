@@ -51,3 +51,22 @@ export interface LineStyle {
     width: number,
     color: number[],
 }
+
+/**
+ * 标绘信息
+ */
+export enum FeatureType {
+    POINT,
+    LINE,
+    POLYGON
+}
+
+export interface FeatureInfo {
+    type: FeatureType,
+}
+
+export enum EditorStatus {
+    WATING,
+    EDITING,
+    END
+}

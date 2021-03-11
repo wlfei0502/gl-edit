@@ -78,3 +78,38 @@ export function lngLatToPoint(callback){
         return [ x, y ];
     }
 }
+
+/**
+ * 去除首尾空格
+ * @param {*} str 
+ */
+export function trim(str) {
+    return str.trim ? str.trim() : str.replace(/^\s+|\s+$/g, '');
+}
+
+/**
+ * 字符串按空格分割
+ * @param {*} str 
+ */
+export function splitWords(str) {
+    return trim(str).split(/\s+/);
+}
+
+/**
+ * 生成uuid
+ */
+export function generateUUID() {
+    var d = new Date().getTime();
+
+    if (window.performance && typeof window.performance.now === 'function') {
+        d += performance.now();
+    }
+
+    var uuid = 'client_xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        var r = (d + Math.random() * 16) % 16 | 0;
+        d = Math.floor(d / 16);
+        return (c == 'x' ? r : (r & 0x3) | 0x8).toString(16);
+    });
+
+    return uuid;
+}

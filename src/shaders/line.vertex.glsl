@@ -42,26 +42,38 @@ void main() {
         vec2 dirA = normalize((currScreen - prevScreen));
         if (miter == 1) {
             vec2 dirB = normalize((nextScreen - currScreen));
-            // 计算拐角处的法向量和斜角长度
-            vec2 tangent = normalize(dirA + dirB);
-            // 旋转90度
-            vec2 perp = vec2(-dirA.y, dirA.x);
-            vec2 miter = vec2(-tangent.y, tangent.x);
-            dir = tangent;
-            // 斜角长度
-            len = thickness / dot(miter, perp);
+
+            // 两向量夹角
+            float cosin = dot(dirA, dirB);
+
+            if(cosin < -0.995){
+                dir = dirB;
+            } else {
+                // 计算拐角处的法向量和斜角长度
+                vec2 tangent = normalize(dirA + dirB);
+
+                // 旋转90度
+                vec2 perp = vec2(-dirA.y, dirA.x);
+                vec2 miter = vec2(-tangent.y, tangent.x);
+                dir = tangent;
+                // 斜角长度
+                len = thickness / dot(miter, perp);
+            }
         } else {
             dir = dirA;
         }
     }
 
-    // TODO:该处理以屏幕高度像素为基准，确定线的厚度, 此处为近似处理. 期待更好的处理
-    float scale = len / height;
-
     // 旋转90度，缩放scale, 即是该点移动的距离
-    vec2 normal = vec2(-dir.y, dir.x) * scale;
+    vec2 normal = vec2(-dir.y, dir.x) * len;
+
+    // y坐标不需要变形
+    normal.y /= height;
+    // x坐标因为在模型变换的时候，坐标缩减了一半，此处需要乘以2.0复原，再除以宽度
+    normal.x /= height * aspect / 2.0;
     normal.x /= aspect;
 
-    vec4 offset = vec4(normal * offsetScale, 0.0, 1.0);
-    gl_Position = vec4(currProject + offset.xy, 0.0, 1.0);
+    // 上下各移动一半距离
+    vec4 offset = vec4(normal * offsetScale, 0.0, 0.0);
+    gl_Position = vec4(currProject, 0.0, 1.0) + offset;
 }

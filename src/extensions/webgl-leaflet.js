@@ -6,8 +6,7 @@ const {
     Renderer, 
     DomEvent:{ on, off }, 
     Util:{ cancelAnimFrame },
-    DomUtil:{ remove, setPosition },
-    Browser:{ retina }
+    DomUtil:{ remove, setPosition }
 } = L;
 
 // 继承render
@@ -27,17 +26,6 @@ const WebglLeaflet = Renderer.extend({
         this._draw();
     },
 
-    _draw: function () {
-        // webgl 编辑器，初始化
-        this._editor = new Editor(this.gl, {
-            lngLatsToPoints: this._LngLatsToPointsCall(),
-            getModelMatrix: this._getModelMatrixCall()
-        });
-
-        // 初始化绘制
-        this._editor.repaint();
-    },
-
     _initContainer: function () {
         var container = this._container = document.createElement('canvas');
 
@@ -52,6 +40,67 @@ const WebglLeaflet = Renderer.extend({
         }
     },
 
+    _draw: function () {
+        // webgl 编辑器，初始化
+        this._editor = new Editor(this.gl, {
+            lngLatsToPoints: this._LngLatsToPointsCall(),
+            getModelMatrix: this._getModelMatrixCall()
+        });
+
+        // 初始化绘制
+        this._editor.repaint();
+
+        // 拾取事件
+        this._editor._context.on('picked', (featureId) => {
+            this.fire('picked', {
+                featureId
+            });
+        });
+    },
+
+    /**
+     * 开始编辑哪种要素
+     * @param {*} featureType 要素类型
+     * @param {*} finish 绘制结束的回调函数
+     */
+    start: function (featureType, finish) {
+        const { doubleClickZoom } = this._map.options;
+        // 禁用双击放大事件
+        if (doubleClickZoom) {
+            this._map.doubleClickZoom.disable();
+        }
+
+        let clickFn = null, moveFn = null;
+
+        // 通过回调，将editor和具体的地图api分割开，方便将来与其它地图API做适配，比如：mapbox
+        this._editor.start(featureType, (mouseClick, mouseMove) => {
+            clickFn = (evt) => {
+                const lngLat = evt.latlng;
+                mouseClick(lngLat, (lngLats) => {
+                    this._map.off('click', clickFn);
+                    this._map.off('mousemove', moveFn);
+
+                    finish(lngLats);
+
+                    // 绘制完成恢复双击放大
+                    if (doubleClickZoom) {
+                        setTimeout(() => {
+                            this._map.doubleClickZoom.enable();
+                        }, 200);
+                    }
+                });
+            };
+
+            moveFn = (evt) => {
+                const lngLat = evt.latlng;
+                mouseMove(lngLat);
+            }
+
+            this._map.on('click', clickFn);
+            this._map.on('mousemove', moveFn);
+        });
+    },
+
     _update: function () {
         if (this._map._animatingZoom && this._bounds) { return; }
 
@@ -60,7 +109,7 @@ const WebglLeaflet = Renderer.extend({
         const b = this._bounds,
             container = this._container,
             size = b.getSize(),
-            m = retina ? 2 : 1;
+            m = window.devicePixelRatio;
 
         setPosition(container, b.min);
 
@@ -103,9 +152,11 @@ const WebglLeaflet = Renderer.extend({
     },
 
     _onMouseOut: function (e) {
+
     },
 
     _onMouseHover: function (e, point) {
+        
     },
 
     _fireEvent: function (layers, e, type) {

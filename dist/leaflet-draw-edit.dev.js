@@ -100,6 +100,40 @@
       return [x, y];
     };
   }
+  /**
+   * 去除首尾空格
+   * @param {*} str 
+   */
+
+  function trim(str) {
+    return str.trim ? str.trim() : str.replace(/^\s+|\s+$/g, '');
+  }
+  /**
+   * 字符串按空格分割
+   * @param {*} str 
+   */
+
+  function splitWords(str) {
+    return trim(str).split(/\s+/);
+  }
+  /**
+   * 生成uuid
+   */
+
+  function generateUUID() {
+    var d = new Date().getTime();
+
+    if (window.performance && typeof window.performance.now === 'function') {
+      d += performance.now();
+    }
+
+    var uuid = 'client_xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      var r = (d + Math.random() * 16) % 16 | 0;
+      d = Math.floor(d / 16);
+      return (c == 'x' ? r : r & 0x3 | 0x8).toString(16);
+    });
+    return uuid;
+  }
 
   var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
 
@@ -10621,6 +10655,22 @@
 
   });
 
+  /**
+   * 标绘信息
+   */
+  var FeatureType;
+  (function (FeatureType) {
+      FeatureType[FeatureType["POINT"] = 0] = "POINT";
+      FeatureType[FeatureType["LINE"] = 1] = "LINE";
+      FeatureType[FeatureType["POLYGON"] = 2] = "POLYGON";
+  })(FeatureType || (FeatureType = {}));
+  var EditorStatus;
+  (function (EditorStatus) {
+      EditorStatus[EditorStatus["WATING"] = 0] = "WATING";
+      EditorStatus[EditorStatus["EDITING"] = 1] = "EDITING";
+      EditorStatus[EditorStatus["END"] = 2] = "END";
+  })(EditorStatus || (EditorStatus = {}));
+
   /*! *****************************************************************************
   Copyright (c) Microsoft Corporation.
 
@@ -10652,6 +10702,236 @@
       d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
   }
 
+  var __assign = function() {
+      __assign = Object.assign || function __assign(t) {
+          for (var s, i = 1, n = arguments.length; i < n; i++) {
+              s = arguments[i];
+              for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
+          }
+          return t;
+      };
+      return __assign.apply(this, arguments);
+  };
+
+  /** @deprecated */
+  function __spreadArrays() {
+      for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
+      for (var r = Array(s), k = 0, i = 0; i < il; i++)
+          for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
+              r[k] = a[j];
+      return r;
+  }
+
+  function falseFn() { return false; }
+  /**
+   * 实现发布-订阅模式的事件中心
+   * 源码修改自leaflet的Event类
+   */
+  var Evented = /** @class */ (function () {
+      function Evented() {
+          this._events = {};
+      }
+      /**
+       * 事件注册
+       * @param types { start:fn, end:fn } || start end
+       * @param fn context || function
+       * @param context null || context
+       */
+      Evented.prototype.on = function (types, fn, context) {
+          if (typeof types === 'object') {
+              for (var type in types) {
+                  this._on(type, types[type], fn);
+              }
+          }
+          else {
+              types = splitWords(types);
+              for (var i = 0, len = types.length; i < len; i++) {
+                  this._on(types[i], fn, context);
+              }
+          }
+          return this;
+      };
+      /**
+       * 事件注销
+       * @param types
+       * @param fn
+       * @param context
+       */
+      Evented.prototype.off = function (types, fn, context) {
+          if (!types) {
+              delete this._events;
+          }
+          else if (typeof types === 'object') {
+              for (var type in types) {
+                  this._off(type, types[type], fn);
+              }
+          }
+          else {
+              types = splitWords(types);
+              for (var i = 0, len = types.length; i < len; i++) {
+                  this._off(types[i], fn, context);
+              }
+          }
+          return this;
+      };
+      /**
+       * 单个事件注册
+       * @param type
+       * @param fn
+       * @param context
+       */
+      Evented.prototype._on = function (type, fn, context) {
+          this._events = this._events || {};
+          var typeListeners = this._events[type];
+          if (!typeListeners) {
+              typeListeners = [];
+              this._events[type] = typeListeners;
+          }
+          if (!context) {
+              context = this;
+          }
+          var newListener = { fn: fn, ctx: context }, listeners = typeListeners;
+          for (var i = 0, len = listeners.length; i < len; i++) {
+              if (listeners[i].fn === fn && listeners[i].ctx === context) {
+                  return;
+              }
+          }
+          listeners.push(newListener);
+      };
+      /**
+       * 单个事件注销
+       * @param type
+       * @param fn
+       * @param context
+       */
+      Evented.prototype._off = function (type, fn, context) {
+          var listeners, i, len;
+          if (!this._events) {
+              return;
+          }
+          listeners = this._events[type];
+          if (!listeners) {
+              return;
+          }
+          if (!fn) {
+              for (i = 0, len = listeners.length; i < len; i++) {
+                  listeners[i].fn = falseFn;
+              }
+              delete this._events[type];
+              return;
+          }
+          if (!context) {
+              context = this;
+          }
+          if (listeners) {
+              for (i = 0, len = listeners.length; i < len; i++) {
+                  var l = listeners[i];
+                  if (l.ctx !== context) {
+                      continue;
+                  }
+                  if (l.fn === fn) {
+                      l.fn = falseFn;
+                      if (this._firingCount) {
+                          this._events[type] = listeners = listeners.slice();
+                      }
+                      listeners.splice(i, 1);
+                      return;
+                  }
+              }
+          }
+      };
+      /**
+       * 触发事件
+       * @param type 事件类型
+       * @param data 事件数据
+       */
+      Evented.prototype.fire = function (type, data) {
+          if (!this.listens(type)) {
+              return this;
+          }
+          if (this._events) {
+              var listeners = this._events[type];
+              if (listeners) {
+                  this._firingCount = (this._firingCount + 1) || 1;
+                  for (var i = 0, len = listeners.length; i < len; i++) {
+                      var l = listeners[i];
+                      l.fn.call(l.ctx || this, data);
+                  }
+                  this._firingCount--;
+              }
+          }
+          return this;
+      };
+      /**
+       * 判断事件是否已经监听过
+       * @param type
+       */
+      Evented.prototype.listens = function (type) {
+          var listeners = this._events && this._events[type];
+          if (listeners && listeners.length) {
+              return true;
+          }
+          return false;
+      };
+      return Evented;
+  }());
+
+  var Color = /** @class */ (function () {
+      function Color() {
+          this._colors = {};
+          this._currentColor = [0, 0, 0, 0];
+      }
+      Color.prototype.getColor = function (uuid) {
+          function recursive(color, index) {
+              var part = color[index];
+              if (part + 1 <= 255) {
+                  part = part + 1;
+                  color[index] = part;
+                  return;
+              }
+              else {
+                  color[index] = 0;
+              }
+              recursive(color, index + 1);
+          }
+          recursive(this._currentColor, 0);
+          // 颜色与uuid一一对应
+          var colorKey = this._currentColor.join('-');
+          this._colors[colorKey] = uuid;
+          return __spreadArrays(this._currentColor);
+      };
+      Color.prototype.getUUID = function (colorKey) {
+          return this._colors[colorKey];
+      };
+      return Color;
+  }());
+
+  /**
+   * 图形绘制上下文，用来管理图形编辑的全局状态
+   */
+  var Context = /** @class */ (function (_super) {
+      __extends(Context, _super);
+      function Context() {
+          var _this = _super.call(this) || this;
+          _this.color = new Color();
+          return _this;
+      }
+      /**
+       * 编辑模式切换
+       * @param type 要素类型
+       * @param status 要素处于哪种编辑模式
+       * @param fn 要素进入该模式需要执行的函数
+       */
+      Context.prototype.enter = function (type, status, fn) {
+          this.mode = type + "_" + status;
+          // this.fire(this.mode, fn);
+      };
+      Context.prototype.exit = function () {
+          this.mode = '';
+      };
+      return Context;
+  }(Evented));
+
   var Shape = /** @class */ (function () {
       function Shape(regl, _a) {
           var lngLatsToPoints = _a.lngLatsToPoints, getModelMatrix = _a.getModelMatrix;
@@ -10680,105 +10960,223 @@
       return Shape;
   }());
 
-  var vert = "#define GLSLIFY 1\nuniform mat3 model;uniform float thickness;uniform int miter;uniform float aspect;uniform float height;attribute vec2 prevPosition;attribute vec2 currPosition;attribute vec2 nextPosition;attribute float offsetScale;void main(){vec2 aspectVec=vec2(aspect,1.0);vec2 prevProject=(model*vec3(prevPosition,1.0)).xy;vec2 currProject=(model*vec3(currPosition,1.0)).xy;vec2 nextProject=(model*vec3(nextPosition,1.0)).xy;vec2 prevScreen=prevProject*aspectVec;vec2 currScreen=currProject*aspectVec;vec2 nextScreen=nextProject*aspectVec;float len=thickness;vec2 dir=vec2(0.0);if(currScreen==prevScreen){dir=normalize(nextScreen-currScreen);}else if(currScreen==nextScreen){dir=normalize(currScreen-prevScreen);}else{vec2 dirA=normalize((currScreen-prevScreen));if(miter==1){vec2 dirB=normalize((nextScreen-currScreen));vec2 tangent=normalize(dirA+dirB);vec2 perp=vec2(-dirA.y,dirA.x);vec2 miter=vec2(-tangent.y,tangent.x);dir=tangent;len=thickness/dot(miter,perp);}else{dir=dirA;}}float scale=len/height;vec2 normal=vec2(-dir.y,dir.x)*scale;normal.x/=aspect;vec4 offset=vec4(normal*offsetScale,0.0,1.0);gl_Position=vec4(currProject+offset.xy,0.0,1.0);}"; // eslint-disable-line
+  var vert = "#define GLSLIFY 1\nuniform mat3 model;uniform float thickness;uniform int miter;uniform float aspect;uniform float height;attribute vec2 prevPosition;attribute vec2 currPosition;attribute vec2 nextPosition;attribute float offsetScale;void main(){vec2 aspectVec=vec2(aspect,1.0);vec2 prevProject=(model*vec3(prevPosition,1.0)).xy;vec2 currProject=(model*vec3(currPosition,1.0)).xy;vec2 nextProject=(model*vec3(nextPosition,1.0)).xy;vec2 prevScreen=prevProject*aspectVec;vec2 currScreen=currProject*aspectVec;vec2 nextScreen=nextProject*aspectVec;float len=thickness;vec2 dir=vec2(0.0);if(currScreen==prevScreen){dir=normalize(nextScreen-currScreen);}else if(currScreen==nextScreen){dir=normalize(currScreen-prevScreen);}else{vec2 dirA=normalize((currScreen-prevScreen));if(miter==1){vec2 dirB=normalize((nextScreen-currScreen));float cosin=dot(dirA,dirB);if(cosin<-0.995){dir=dirB;}else{vec2 tangent=normalize(dirA+dirB);vec2 perp=vec2(-dirA.y,dirA.x);vec2 miter=vec2(-tangent.y,tangent.x);dir=tangent;len=thickness/dot(miter,perp);}}else{dir=dirA;}}vec2 normal=vec2(-dir.y,dir.x)*len;normal.y/=height;normal.x/=height*aspect/2.0;normal.x/=aspect;vec4 offset=vec4(normal*offsetScale,0.0,0.0);gl_Position=vec4(currProject,0.0,1.0)+offset;}"; // eslint-disable-line
 
-  var frag = "precision mediump float;\n#define GLSLIFY 1\nuniform vec4 color;void main(){gl_FragColor=color;}"; // eslint-disable-line
+  var frag = "precision mediump float;\n#define GLSLIFY 1\nuniform vec4 color;uniform int picked;void main(){gl_FragColor=color/255.0;}"; // eslint-disable-line
 
   var FLOAT_BYTES = Float32Array.BYTES_PER_ELEMENT;
   var Line = /** @class */ (function (_super) {
       __extends(Line, _super);
-      function Line(regl, lngLats, style, options) {
+      function Line(context, regl, info, options) {
+          if (info === void 0) { info = {
+              id: '0',
+              lngLats: [],
+              style: {
+                  width: 3,
+                  color: [255, 255, 255, 255]
+              }
+          }; }
           var _this = _super.call(this, regl, options) || this;
-          _this._lngLats = lngLats;
-          _this._style = style;
-          _this._init();
+          _this._context = context;
+          _this._id = info.id === '0' ? generateUUID() : info.id;
+          _this._lngLats = info.lngLats;
+          _this._style = info.style;
+          _this._pickColor = _this._context.color.getColor(_this._id);
+          // 初始化绘制配置
+          _this._initDraw();
+          // 初始化事件监听
+          _this._initEvent();
           return _this;
       }
-      Line.prototype._init = function () {
+      Line.prototype._initDraw = function () {
+          this._positionBuffer = this._regl.buffer({
+              usage: 'dynamic',
+              type: 'float'
+          });
+          this._offsetBuffer = this._regl.buffer({
+              usage: 'dynamic',
+              type: 'float'
+          });
+          var uniforms = {
+              model: function (context, props) { return props.modelMatrix; },
+              color: function (context, props) { return props.color; },
+              thickness: function (context, props) { return props.width; },
+              miter: 1,
+              aspect: function (_a) {
+                  var viewportWidth = _a.viewportWidth, viewportHeight = _a.viewportHeight;
+                  return viewportWidth / viewportHeight;
+              },
+              height: function (_a) {
+                  var viewportHeight = _a.viewportHeight, pixelRatio = _a.pixelRatio;
+                  return viewportHeight / pixelRatio;
+              }
+          };
+          var attributes = {
+              prevPosition: {
+                  buffer: this._positionBuffer,
+                  offset: 0
+              },
+              currPosition: {
+                  buffer: this._positionBuffer,
+                  offset: FLOAT_BYTES * 2 * 2
+              },
+              nextPosition: {
+                  buffer: this._positionBuffer,
+                  offset: FLOAT_BYTES * 2 * 4
+              },
+              offsetScale: this._offsetBuffer
+          };
+          var elements = this._elements = this._regl.elements({
+              primitive: 'triangles',
+              usage: 'dynamic',
+              type: 'uint16'
+          });
           // 预编译着色器程序
           this._drawCommand = this._regl({
               vert: vert,
-              frag: frag
+              frag: frag,
+              uniforms: uniforms,
+              attributes: attributes,
+              elements: elements
+          });
+      };
+      Line.prototype._initEvent = function () {
+          // 拾取事件
+          this._context.on('pick-start', this._pick, this);
+      };
+      /**
+       * 拾取
+       * @param pickInfo 拾取所需要的信息, 鼠标所在位置坐标和帧缓冲区
+       */
+      Line.prototype._pick = function (pickInfo) {
+          var _this = this;
+          if (this._lngLats.length === 0) {
+              return;
+          }
+          var x = pickInfo.x, y = pickInfo.y, fbo = pickInfo.fbo;
+          // 在帧缓冲区上绘制，拾取
+          this._regl({ framebuffer: fbo })(function () {
+              // 清除缓冲区
+              _this._regl.clear({
+                  color: [0, 0, 0, 0],
+                  depth: 1
+              });
+              // 绘制到缓冲区
+              _this._draw({ color: _this._pickColor });
+              // 拾取鼠标点击位置的颜色
+              var rgba = _this._regl.read({
+                  x: x,
+                  y: y,
+                  width: 1,
+                  height: 1
+              });
+              // 颜色分量组成的key
+              var colorKey = rgba.join('-');
+              // 颜色key对应的uuid
+              var uuid = _this._context.color.getUUID(colorKey);
+              // uuid存在，说明拾取到对象了
+              if (uuid) {
+                  _this._context.fire('picked', uuid);
+              }
           });
       };
       /**
-       * 重绘
+       * 标线处于等待标绘的状态
+       * @param register 注册鼠标点击和移动
        */
-      Line.prototype.repaint = function () {
+      Line.prototype.waiting = function (register) {
           var _this = this;
-          // 获取线的gl
+          // 地图点击事件
+          var mapClick = function (lngLat, finish) {
+              var len = _this._lngLats.length;
+              if (len > 1) {
+                  var lastLngLat = _this._lngLats[len - 2];
+                  // 最后一个点点击的位置相同即完成绘制
+                  // 之后需要添加缓冲区，只要点击到缓冲区内，就代表绘制结束
+                  if (lastLngLat.lng === lngLat.lng && lastLngLat.lat === lngLat.lat) {
+                      // 移除最后一个移动点
+                      _this._lngLats.splice(len - 1, 1);
+                      // 完成绘制的回调函数
+                      finish({
+                          id: _this._id,
+                          lngLats: _this._clone()
+                      });
+                      _this._context.fire('draw-finish');
+                      return;
+                  }
+                  else {
+                      _this._lngLats[len - 1] = lngLat;
+                  }
+              }
+              else {
+                  // 首次绘制，需要为线添加两个点
+                  _this._lngLats.push(lngLat);
+              }
+              // 添加移动点
+              _this._lngLats.push(lngLat);
+              // 重绘
+              _this._context.fire('redraw');
+          };
+          // 鼠标在地图上移动事件
+          var mapMove = function (lngLat) {
+              var len = _this._lngLats.length;
+              if (len === 0) {
+                  return;
+              }
+              else if (len === 1) {
+                  _this._lngLats.push(lngLat);
+              }
+              _this._lngLats[len - 1] = lngLat;
+              _this._context.fire('redraw');
+          };
+          // 注册监听函数
+          register(mapClick, mapMove);
+      };
+      Line.prototype._draw = function (props) {
+          if (this._lngLats.length < 2) {
+              return;
+          }
+          else if (this._lngLats.length === 2) {
+              if (this._lngLats[0] === this._lngLats[1]) {
+                  return;
+              }
+          }
+          // 经纬度转屏幕像素坐标
           var points = this.project(this._lngLats);
           var len = points.length;
+          // 顶点位置平铺成一维的
           var positions = [];
           for (var p = 0; p < points.length; p++) {
               var point = points[p];
               positions.push.apply(positions, point);
           }
+          // 以 1，2，3三个顶点为例
+          // 复制最后一个顶点，放到最后面：1，2，3，3
           buffer.pushElement(positions, len - 1, 2);
+          // 复制第一个顶点，放到最前面：1，1，2，3，3
           buffer.unshiftElement(positions, 0, 2);
-          var offset = new Array(len).fill(1);
+          // 所有顶点挨个复制，1，1，2，3，3 -> 1，1，1，1，2，2，3，3，3，3
           var positionsDup = new Float32Array(buffer.duplicate(positions, 2));
+          // 法向量两侧反向
+          var offset = new Array(len).fill(1);
           var offsetDup = buffer.duplicate(offset, 1, -1);
           var indices = links.lineMesh([], len, 0);
-          var positionBuffer = this._regl.buffer({
-              usage: 'dynamic',
-              type: 'float',
-              length: (len + 2) * 2 * 2 * FLOAT_BYTES,
-              data: positionsDup
-          });
-          var offsetBuffer = this._regl.buffer({
-              usage: 'static',
-              type: 'float',
-              length: (len + 2) * 2 * 1 * FLOAT_BYTES,
-              data: offsetDup
-          });
-          var attributes = {
-              prevPosition: {
-                  buffer: positionBuffer,
-                  offset: 0,
-                  stride: 0
-              },
-              currPosition: {
-                  buffer: positionBuffer,
-                  offset: FLOAT_BYTES * 2 * 2,
-                  stride: 0
-              },
-              nextPosition: {
-                  buffer: positionBuffer,
-                  offset: FLOAT_BYTES * 2 * 4,
-                  stride: 0
-              },
-              offsetScale: offsetBuffer
-          };
+          // 更新缓冲区
+          // 顶点更新
+          this._positionBuffer(positionsDup);
+          // 法向量方向更新
+          this._offsetBuffer(offsetDup);
+          // 索引更新
+          this._elements(indices);
           // 模型变换矩阵
           var modelMatrix = this.getModelMatrix();
-          var uniforms = {
-              model: modelMatrix,
-              color: [0.8, 0.5, 0, 1],
-              thickness: 10,
-              miter: 1,
-              aspect: function (_a) {
-                  var viewportWidth = _a.viewportWidth, viewportHeight = _a.viewportHeight;
-                  return (viewportWidth / viewportHeight);
-              },
-              height: function (_a) {
-                  var viewportHeight = _a.viewportHeight, pixelRatio = _a.pixelRatio;
-                  return (viewportHeight / pixelRatio);
-              }
-          };
-          var elements = this._regl.elements({
-              primitive: 'triangles',
-              usage: 'static',
-              type: 'uint16',
-              data: indices
-          });
-          this._drawCommand(function () {
-              _this._regl({
-                  uniforms: uniforms,
-                  attributes: attributes,
-                  elements: elements
-              })();
-          });
+          this._drawCommand(__assign({ modelMatrix: modelMatrix, width: this._style.width }, props));
+      };
+      /**
+       * 重绘
+       */
+      Line.prototype.repaint = function () {
+          this._draw(this._style);
       };
       Line.prototype.get = function () {
           return this._lngLats;
@@ -10789,10 +11187,30 @@
       };
       Line.prototype.update = function () {
       };
+      /**
+       * 移除该要素
+       */
+      Line.prototype.destroy = function () {
+          this._lngLats = [];
+          this._context.fire('redraw');
+      };
+      /**
+       * 坐标克隆返回，防止上层应用修改该值
+       */
+      Line.prototype._clone = function () {
+          return this._lngLats.map(function (lngLat) {
+              return __assign({}, lngLat);
+          });
+      };
       return Line;
   }(Shape));
 
-  var lines = [], lngLats;
+  var _a;
+  // 要素类型对应的要素类
+  var featureClasses = (_a = {},
+      _a[FeatureType.LINE] = Line,
+      _a);
+  var features = [], newFeature = null; // 正在绘制的要素
   var Editor = /** @class */ (function () {
       function Editor(gl, options) {
           this._gl = gl;
@@ -10805,12 +11223,69 @@
       Editor.prototype._initialize = function () {
           var _this = this;
           this._regl = regl(this._gl);
+          this._context = new Context();
+          // 窗口变化，重置viewport
           window.addEventListener('resize', function () {
               _this._isPoll = true;
           });
+          // 重绘
+          this._context.on('redraw', this.repaint, this);
+          // 绘制完成
+          this._context.on('draw-finish', this._drawFinish, this);
+          // 画布点击事件
+          this._gl.canvas.addEventListener('click', function (event) {
+              // 非编辑模式才能进行拾取
+              if (_this._context.mode) {
+                  return;
+              }
+              var dpr = window.devicePixelRatio;
+              var evt = event;
+              var clientX = evt.clientX, clientY = evt.clientY;
+              var target = evt.target;
+              var rect = target.getBoundingClientRect();
+              var x = dpr * (clientX - rect.left);
+              var y = _this._gl.drawingBufferHeight - dpr * (clientY - rect.top);
+              // 创建帧缓冲区
+              var fbo = _this._regl.framebuffer({
+                  width: _this._regl._gl.drawingBufferWidth,
+                  height: _this._regl._gl.drawingBufferHeight,
+                  depth: true,
+                  stencil: false,
+                  depthStencil: false
+              });
+              _this._context.fire('pick-start', {
+                  x: x,
+                  y: y,
+                  fbo: fbo
+              });
+              // 销毁帧缓冲区
+              fbo.destroy();
+          });
       };
-      Editor.prototype._draw = function () {
-          this.repaint();
+      /**
+       * 绘制完成
+       */
+      Editor.prototype._drawFinish = function () {
+          // 退出编辑模式
+          this._context.exit();
+          // 新标绘的要素加入到要素集中
+          newFeature && features.push(newFeature);
+          newFeature = null;
+      };
+      /**
+       * 启动编辑
+       * @param featureType 要素类型
+       */
+      Editor.prototype.start = function (featureType, fn) {
+          // 先销毁上一次未完成绘制的要素
+          if (newFeature) {
+              newFeature.destroy();
+          }
+          newFeature = new featureClasses[featureType](this._context, this._regl, undefined, this._options);
+          // 要素进入待编辑模式
+          newFeature.waiting(fn);
+          this._context.enter(featureType, EditorStatus.WATING, fn);
+          return this;
       };
       /**
        * 数据更新，引起图形重新渲染
@@ -10829,36 +11304,33 @@
               color: [0, 0, 0, 0],
               depth: 1
           });
-          // 所有元素重绘
-          if (lines.length === 0) {
-              var lngLatsStr = '116.28273,40.091311;116.282012,40.091028;116.281004,40.090676;116.279992,40.090349;116.278851,40.089986;116.27735,40.089511;116.275946,40.089064;116.274837,40.088705;116.274606,40.088631;116.274258,40.088537;116.273257,40.088217;116.272156,40.087865;116.270763,40.087416;116.270613,40.087369;116.270583,40.087362;116.269882,40.087145;116.270063,40.087023;116.271732,40.086063;116.276693,40.083096;116.278233,40.082157;116.279363,40.081357;116.279924,40.080923;116.280327,40.080611;116.281141,40.079861;116.282208,40.07871;116.28258,40.078425;116.283844,40.076923;116.284016,40.076659;116.285778,40.07395;116.286577,40.072749;116.288505,40.069382;116.288865,40.068827;116.289532,40.067801;116.291775,40.063725;116.291841,40.063616;116.292597,40.062366;116.293947,40.059688;116.294493,40.058464;116.294744,40.058008;116.29495,40.05775;116.295235,40.057622;116.295803,40.057501;116.295945,40.057457;116.296257,40.057365;116.296404,40.057287;116.296541,40.057185;116.296672,40.05707;116.296774,40.056943;116.297319,40.056043;116.297469,40.055794;116.297729,40.055409;116.29783,40.055174;116.297928,40.054972;116.297955,40.054812;116.297934,40.054709;116.297869,40.054623;116.297575,40.054316;116.297479,40.054185;116.297425,40.053963;116.297806,40.053236;116.298025,40.052804;116.298163,40.05256;116.298298,40.052323;116.298486,40.051954;116.298952,40.051103;116.299262,40.05056;116.300058,40.049129;116.300455,40.048337;116.301268,40.046921;116.302227,40.045384;116.302321,40.045235;116.30085,40.044823;116.300182,40.044642;116.299948,40.044589;116.299849,40.044584;116.299687,40.044596;116.29943,40.044648;116.299361,40.044661;116.29927,40.044696;116.299172,40.044723;116.299137,40.044728;116.298988,40.044722;116.298927,40.044708;116.298866,40.044683;116.298812,40.044653;116.298759,40.044603;116.298735,40.044582;116.2987,40.044525;116.29868,40.044473;116.298666,40.044399;116.298669,40.044336;116.298669,40.044237;116.298724,40.044118;116.298767,40.04408;116.29881,40.044043;116.298841,40.044018;116.298886,40.044001;116.298936,40.043984;116.298962,40.043973;116.299067,40.043953;116.299152,40.043943;116.299293,40.043888;116.299319,40.043873;116.299363,40.043835;116.29943,40.043752;116.299631,40.043411;116.299797,40.04313;116.299915,40.042932;116.300269,40.042332;116.300341,40.042209;116.300528,40.041894;116.300782,40.04144;116.300981,40.041086;116.301222,40.040658;116.301354,40.04043;116.301861,40.039524;116.301932,40.039401;116.302047,40.039211;116.302272,40.038836;116.30234,40.038723;116.302725,40.038079;116.303122,40.037422;116.303273,40.03717;116.303357,40.037028;116.303464,40.036843;116.303616,40.036568;116.303731,40.036362;116.303927,40.036006;116.30402,40.035838;116.304038,40.035807;116.304085,40.03571;116.304093,40.035554;116.304046,40.035375;116.303921,40.035024;116.303761,40.034823;116.303655,40.034799;116.302554,40.034526;116.302513,40.034517;116.302056,40.034412;116.300908,40.03416;116.300811,40.034138;116.29962,40.033864;116.298883,40.033703;116.298696,40.033661;116.298504,40.03362;116.297682,40.033449;116.296916,40.033289;116.296381,40.033188;116.295807,40.033098;116.294626,40.032965;116.293159,40.032841;116.292139,40.03271;116.291355,40.032712;116.290771,40.032711;116.290722,40.032711;116.290689,40.032711;116.288802,40.032698;116.288757,40.032698;116.288544,40.032695;116.288209,40.032692;116.286997,40.032674;116.286444,40.032662;116.285347,40.032686;116.284424,40.032707;116.282949,40.03274;116.281962,40.032743;116.281258,40.032724;116.280547,40.032705;116.279536,40.032702;116.278124,40.0327;116.277461,40.032698;116.275894,40.032661;116.274709,40.032589;116.273199,40.032434;116.272069,40.032246;116.271038,40.032063;116.270062,40.031874;116.26986,40.031839;116.269488,40.031774;116.269438,40.031766;116.269291,40.031736;116.268661,40.031605;116.268105,40.031488;116.266667,40.03119;116.26653,40.031162;116.265488,40.030948;116.265267,40.030903;116.265237,40.030897;116.264914,40.030828;116.26481,40.03081;116.263975,40.030625;116.263677,40.030567;116.262785,40.030378;116.262696,40.030359;116.262641,40.030349;116.262437,40.030305;116.26104,40.030007;116.260807,40.029958;116.260124,40.029818;116.259711,40.029805;116.259131,40.029794;116.259096,40.029746;116.259062,40.029696;116.259022,40.029102;116.259017,40.02903;116.259017,40.028759;116.259014,40.028238;116.259017,40.028073;116.259027,40.027663;116.259057,40.027103;116.259072,40.026953;116.259179,40.025988;116.259239,40.025649;116.259274,40.025447;116.259289,40.025352;116.259426,40.024586;116.259541,40.02395;116.259613,40.023167;116.259678,40.022615;116.259751,40.022057;116.25976,40.022018;116.25985,40.021624;116.25988,40.021526;116.259909,40.021428;116.260022,40.02115;116.260247,40.020581;116.260447,40.01997;116.260614,40.019449;116.26062,40.019417;116.260714,40.019026;116.260746,40.018859;116.260775,40.018722;116.260846,40.018249;116.260942,40.0173;116.260972,40.016704;116.260972,40.01666;116.260981,40.016145;116.260983,40.016048;116.260996,40.015852;116.261022,40.015355;116.261026,40.015291;116.261028,40.01472;116.260946,40.013454;116.260911,40.013193;116.260903,40.013116;116.260811,40.012393;116.260667,40.011429;116.26065,40.011295;116.26063,40.011097;116.260606,40.010839;116.260591,40.010687;116.260569,40.010268;116.260569,40.010101;116.260569,40.010038;116.260595,40.009838;116.260702,40.009511;116.260806,40.009229;116.260821,40.009194;116.260982,40.008944;116.261255,40.008612;116.261305,40.00855;116.261381,40.008448;116.261552,40.008314;116.261637,40.008253;116.261687,40.008221;116.261789,40.008149;116.261934,40.008067;116.262271,40.007876;116.2623,40.007856;116.262603,40.007685;116.26274,40.007646;116.262788,40.007604;116.263037,40.007405;116.263188,40.007276;116.263338,40.007096;116.26359,40.006762;116.263628,40.006712;116.263897,40.006355;116.264017,40.00618;116.264078,40.006065;116.264193,40.005789;116.264238,40.00565;116.264264,40.005442;116.264275,40.005353;116.264279,40.005162;116.264284,40.005099;116.264229,40.004487;116.264238,40.004255;116.263876,40.004264;116.263615,40.004264;116.263483,40.004266;116.263403,40.004269;116.263223,40.00426;116.263046,40.004256;116.262865,40.004251;116.262755,40.004238;116.262631,40.004216;116.261019,40.003931;116.260771,40.003999;116.260562,40.004068;116.260085,40.004236;116.25985,40.004312;116.259639,40.004379;116.259067,40.004577;116.258876,40.004627;116.258537,40.004711;116.258387,40.004735;116.2583,40.004746;116.25819,40.004757;116.257808,40.00477;116.257092,40.00477;116.256534,40.004757;116.256458,40.004756;116.256287,40.004751;116.255542,40.004728;116.255518,40.004728;116.254665,40.004699;116.253741,40.004693;116.252254,40.004701;116.250999,40.004713;116.250907,40.004733;116.250768,40.004729;116.249957,40.004636;116.249051,40.004533;116.248755,40.0045;116.248385,40.004442;116.248069,40.004359;116.247758,40.004307;116.246889,40.004009;116.246656,40.003931;116.246586,40.003859;116.246243,40.003727;116.245482,40.003423;116.245351,40.003356;116.244087,40.002798;116.243955,40.002746;116.243638,40.002614;116.24334,40.002483;116.242973,40.002323;116.241262,40.001554;116.241186,40.001521;116.240218,40.001087;116.239499,40.000671;116.239141,40.000386;116.23887,40.000264;116.238736,40.000208;116.238402,40.000067;116.238235,39.999997;116.235464,39.998859;116.235206,39.998774;116.235102,39.998739;116.234953,39.998689;116.234827,39.998657;116.234495,39.998593;116.232436,39.998479;116.232068,39.998449;116.231814,39.998405;116.231713,39.998383;116.231675,39.998375;116.231484,39.998318;116.231138,39.998199;116.230862,39.998094;116.230632,39.998005;116.230409,39.997903;116.229545,39.997554;116.229304,39.997461;116.228956,39.997331;116.22878,39.997288;116.228247,39.997188;116.227803,39.997105;116.227279,39.997021;116.227062,39.996986;116.226518,39.996904;116.225695,39.996755;116.22454,39.996565;116.224333,39.996577;116.22399,39.996515;116.223538,39.996366;116.223103,39.996222;116.222759,39.996087;116.221819,39.995761;116.220933,39.995464;116.220198,39.995216;116.219702,39.995048;116.219487,39.994973;116.218874,39.994689;116.218622,39.994569;116.218423,39.994425;116.218404,39.994357;116.218168,39.994161;116.217897,39.993944;116.217273,39.993334;116.216634,39.992705;116.216225,39.992285;116.215961,39.992088;116.215768,39.991945;116.215727,39.99193;116.215687,39.991915;116.215553,39.991836;116.215248,39.991765;116.215103,39.991747;116.215007,39.991768;116.214744,39.991868;116.214434,39.99205;116.214081,39.992258;116.213522,39.992562;116.213145,39.992611;116.212774,39.992557;116.21214,39.992429;116.211587,39.992395;116.211468,39.992374;116.211306,39.99237;116.211047,39.992391;116.21081,39.992397;116.210516,39.992379;116.209959,39.992321;116.209805,39.992305;116.208979,39.992315;116.20813,39.992343;116.205771,39.992453;116.20509,39.992523;116.204724,39.992573;116.20415,39.99265;116.203974,39.99267;116.203853,39.992692;116.203643,39.992719;116.203569,39.992682;116.203514,39.992654;116.203605,39.992563;116.203995,39.991327;116.204137,39.990935;116.204404,39.990198;116.20447,39.990016;116.204676,39.989398;116.204849,39.988921;116.204988,39.988378;116.205026,39.987885;116.204983,39.987585;116.204784,39.987075;116.204677,39.98694;116.204381,39.986573;116.203924,39.986067;116.203499,39.985672;116.203224,39.985442;116.202897,39.985169;116.202692,39.984986;116.202191,39.984513;116.201417,39.983727;116.201217,39.983381;116.201,39.982738;116.200935,39.982415;116.20092,39.981877;116.200951,39.981258;116.20101,39.981118;116.201015,39.980861;116.20102,39.980601;116.201024,39.98034;116.201005,39.979629;116.200998,39.979466;116.200983,39.979355;116.200944,39.979109;116.200918,39.9785;116.200906,39.978242;116.200815,39.978167;116.200805,39.977937;116.200777,39.977604;116.200752,39.977433;116.200745,39.977272;116.200757,39.977166;116.200783,39.976756;116.200829,39.976455;116.200829,39.976452;116.200859,39.976233;116.200895,39.975726;116.200951,39.975148;116.200968,39.975051;116.200979,39.974958;116.20099,39.974888;116.20106,39.974317;116.201132,39.973564;116.201212,39.97278;116.201238,39.972523;116.201303,39.971945;116.201324,39.971753;116.201443,39.970798;116.201449,39.970692;116.201506,39.969867;116.20151,39.969785;116.201515,39.969475;116.201499,39.968891;116.201499,39.968824;116.20146,39.968392;116.201404,39.967945;116.201358,39.967595;116.201334,39.967289;116.201269,39.966701;116.201128,39.965413;116.20112,39.965269;116.201107,39.965023;116.201052,39.964124;116.200992,39.963319;116.200987,39.962879;116.200981,39.962794;116.200948,39.962524;116.200931,39.962384;116.200926,39.961735;116.20095,39.961396;116.200981,39.961236;116.201002,39.961121;116.201107,39.960896;116.201203,39.960692;116.20127,39.960588;116.201355,39.960486;116.201692,39.960103;116.201803,39.96002;116.201864,39.959966;116.202898,39.959064;116.204354,39.957728;116.204532,39.957565;116.204851,39.957277;116.205256,39.956935;116.205391,39.956829;116.2058,39.956448;116.205819,39.95643;116.206406,39.955885;116.206648,39.955663;116.206774,39.955542;116.207144,39.955115;116.207274,39.954929;116.207309,39.954872;116.207339,39.954794;116.207374,39.954694;116.207616,39.953969;116.207626,39.953935;116.207636,39.953896;116.207672,39.953761;116.207834,39.953128;116.20784,39.953096;116.20791,39.952833;116.207951,39.952681;116.207975,39.952592;116.207986,39.952551;116.208107,39.952078;116.208486,39.950547;116.208502,39.95049;116.20851,39.950456;116.208606,39.950093;116.208725,39.949668;116.20875,39.949377;116.208752,39.949216;116.208754,39.949074;116.208712,39.948583;116.208704,39.948506;116.20873,39.948304;116.208697,39.94804;116.208621,39.947802;116.20855,39.947604;116.208484,39.947433;116.20833,39.947163;116.208112,39.946789;116.207558,39.945884;116.207099,39.945133;116.206736,39.944543;116.20653,39.944194;116.206473,39.944099;116.206225,39.943686;116.206151,39.943602;116.206079,39.943554;116.205934,39.943474;116.205564,39.943264;116.20541,39.943271;116.205109,39.943187;116.204631,39.943089;116.204398,39.943069;116.204363,39.943067;116.204103,39.94306;116.203203,39.943053;116.202877,39.943053;116.202673,39.943053;116.200707,39.943003;116.199495,39.942986;116.199128,39.942981;116.198547,39.942975;116.196917,39.942959;116.19681,39.942957;116.195655,39.942923;116.195553,39.942921;116.195025,39.942909;116.194261,39.94291;116.194136,39.942851;116.194176,39.942287;116.194197,39.941289;116.194211,39.940623;116.1942,39.940436;116.194168,39.940217;116.194076,39.939917;116.19398,39.939709;116.193885,39.93947;116.193843,39.939297;116.193722,39.93847;116.193561,39.936867;116.1935,39.936101;116.193491,39.935717;116.19349,39.935305;116.193546,39.934556;116.193552,39.934465;116.193626,39.933318;116.193717,39.932424;116.193894,39.930735;116.193764,39.93064;116.193566,39.930527;116.19319,39.930316;116.192905,39.93016;116.192667,39.930028;116.192516,39.929945;116.192239,39.929793;116.191986,39.929656;116.19168,39.929488;116.191538,39.929434;116.191286,39.929353;116.191057,39.929287;116.190631,39.929186;116.189878,39.929016;116.189298,39.928848;116.189006,39.928778;116.188529,39.92866;116.187771,39.928465;116.187113,39.928297;116.186127,39.92805;116.185768,39.927948;116.185485,39.927873;116.18482,39.927696;116.184704,39.92767;116.183972,39.927478;116.183261,39.927307;116.182527,39.92713;116.181625,39.926909;116.180837,39.926717;116.179544,39.926411;116.179451,39.926386;116.179157,39.926315;116.17888,39.926248;116.175786,39.925445;116.174452,39.925121;116.174199,39.925058;116.174004,39.925008;116.173559,39.924895;116.173116,39.924779;116.171744,39.924422;116.17006,39.923984;116.169536,39.923845;116.169358,39.923778;116.16931,39.923759;116.168831,39.923567;116.168709,39.923525;116.16857,39.923484;116.168263,39.923406;116.16818,39.923387;116.167997,39.923353;116.167322,39.923249;116.166579,39.923185;116.166221,39.92323;116.165484,39.923302;116.164425,39.923314;116.16328,39.923309;116.162877,39.923318;116.162206,39.923333;116.161909,39.923337;116.161154,39.92335;116.160382,39.923351;116.159281,39.923363;116.158322,39.923369;116.157553,39.923361;116.156829,39.92336;116.15646,39.923359;116.156029,39.923343;116.155265,39.923343;116.154944,39.923344;116.154961,39.924534;116.154961,39.924588;116.154942,39.924963;116.154927,39.925026;116.154861,39.925189;116.154422,39.926115;116.154178,39.926644;116.154004,39.927031;116.153851,39.92737;116.153639,39.927783;116.153408,39.928197;116.153347,39.92832;116.153267,39.928446;116.153205,39.928526;116.152968,39.928765;116.152685,39.929054;116.152448,39.929295;116.152402,39.929343;116.151958,39.9298;116.151571,39.9302;116.151384,39.930398;116.151292,39.930496;116.150925,39.930885;116.150665,39.931174;116.15047,39.93139;116.148722,39.933286;116.148496,39.93352;116.1484,39.933618;116.147813,39.934183;116.147369,39.934631;116.147219,39.93477;116.146784,39.935088;116.146375,39.935328;116.145789,39.93564;116.145507,39.935778;116.145023,39.936014;116.144368,39.936336;116.144266,39.936386;116.143811,39.936615;116.143625,39.936709;116.143181,39.936892;116.142874,39.93704;116.141938,39.937454;116.141153,39.937766;116.138397,39.938767;116.137298,39.939147;116.137142,39.93921;116.136581,39.939423;116.13627,39.939567;116.135965,39.939731;116.135785,39.939852;116.13567,39.939945;116.135621,39.939985;116.135341,39.940262;116.134978,39.940721;116.134703,39.941086;116.134346,39.941549;116.13403,39.941975;116.133911,39.94204;116.133664,39.942345;116.133342,39.942733;116.132993,39.943167;116.132601,39.943661;116.132439,39.943887;116.132294,39.944055;116.132041,39.944305;116.13185,39.944459;116.131667,39.944559;116.13135,39.94469;116.131107,39.944746;116.131062,39.944757;116.130795,39.944782;116.130634,39.94478;116.130536,39.944778;116.130397,39.944771;116.129875,39.944718;116.129477,39.944686;116.129109,39.944664;116.128914,39.94468;116.128742,39.944706;116.12859,39.944739;116.128423,39.944795;116.128059,39.944955;116.127769,39.945137;116.127275,39.945473;116.12684,39.945798;116.126243,39.946216;116.125725,39.946596;116.125409,39.946844;116.125281,39.946979;116.12513,39.947183;116.124998,39.947419;116.124913,39.947641;116.124894,39.947695;116.124878,39.947797;116.124868,39.947967;116.124919,39.948133;116.12492,39.948681;116.12492,39.948927;116.124913,39.949051;116.124874,39.949233;116.124844,39.949315;116.124787,39.949475;116.124684,39.94966;116.124584,39.949819;116.12448,39.949957;116.124182,39.950231;116.122486,39.951937;116.122215,39.952282;116.122199,39.952377;116.122043,39.952579;116.121854,39.952824;116.121726,39.95303;116.121521,39.95333;116.121344,39.953597;116.121226,39.953778;116.121194,39.953827;116.12114,39.953848;116.120843,39.954264;116.120645,39.954552;116.120358,39.954984;116.120312,39.955053;116.120269,39.95511;116.120152,39.955259;116.119996,39.955436;116.119899,39.955544;116.119779,39.955653;116.119556,39.955851;116.119077,39.956205;116.118993,39.956261;116.118876,39.956333;116.118677,39.956398;116.118156,39.956558;116.117319,39.956829;116.116892,39.95695;116.116694,39.957006;116.115706,39.957251;116.114267,39.957629;116.113143,39.957952;116.112425,39.958104;116.111492,39.958342;116.111375,39.958363;116.1108,39.958492;116.110535,39.958545;116.110181,39.958618;116.109784,39.958703;116.109734,39.958714;116.109314,39.958803;116.109225,39.958819;116.109126,39.95884;116.109112,39.958844;116.108962,39.958878;116.108722,39.958934;116.108317,39.959032;116.10823,39.959056;116.107905,39.95914;116.107713,39.959203;116.107496,39.959288;116.107415,39.959323;116.107279,39.959386;116.106881,39.959591;116.106845,39.959615;116.106492,39.959808;116.106186,39.959981;116.106114,39.96002;116.105798,39.960207;116.105686,39.96027;116.105571,39.960337;116.105284,39.960504;116.105187,39.960554;116.105128,39.96058;116.105076,39.960606;116.104976,39.960643;116.104889,39.960678;116.104805,39.960701;116.104664,39.960739;116.104537,39.960765;116.104452,39.96078;116.1043,39.960795;116.104139,39.960803;116.10412,39.960804;116.104033,39.960804;116.103938,39.960795;116.103784,39.960791;116.103621,39.960741;116.103165,39.960571;116.103032,39.960489;116.102523,39.960263;116.101589,39.959906;116.100761,39.959565;116.100498,39.959491;116.100365,39.959449;116.100232,39.959381;116.099907,39.959219;116.099566,39.959049;116.099243,39.95888;116.098819,39.958728;116.098428,39.958588;116.097658,39.958348;116.097278,39.958238;116.094403,39.957565;116.092807,39.957189;116.092727,39.957149;116.092729,39.957028;116.092837,39.955749;116.092777,39.954949;116.092657,39.954779;116.09254,39.953933;116.092343,39.952661;116.092327,39.952538;116.092343,39.952468;116.092418,39.952357;116.092316,39.951642;116.092284,39.951459;116.092209,39.951029;116.092177,39.950498;116.092207,39.950099;116.092372,39.949437;116.09261,39.948775';
-              lngLats = lngLatsStr.split(';').map(function (item, idx) {
-                  var lngLatArray = item.split(',').map(function (str) {
-                      return Number(str);
-                  });
-                  return {
-                      lng: lngLatArray[0],
-                      lat: lngLatArray[1]
-                  };
-              });
-              var _loop_1 = function (i) {
-                  lngLats = lngLats.map(function (lngLat) {
-                      return {
-                          lng: lngLat.lng - 0.001 * i,
-                          lat: lngLat.lat
-                      };
-                  });
-                  var line = new Line(this_1._regl, lngLats, { color: [1, 0.7, 0.2, 1], width: 6 }, this_1._options);
-                  lines.push(line);
-              };
-              var this_1 = this;
-              for (var i = 0; i < 1; i++) {
-                  _loop_1(i);
-              }
-          }
-          lines.forEach(function (line) {
-              line.repaint();
+          // // 所有元素重绘
+          // if (lines.length === 0) {
+          //     const lngLatsStr = '116.28273,40.091311;116.282012,40.091028;116.281004,40.090676;116.279992,40.090349;116.278851,40.089986;116.27735,40.089511;116.275946,40.089064;116.274837,40.088705;116.274606,40.088631;116.274258,40.088537;116.273257,40.088217;116.272156,40.087865;116.270763,40.087416;116.270613,40.087369;116.270583,40.087362;116.269882,40.087145;116.270063,40.087023;116.271732,40.086063;116.276693,40.083096;116.278233,40.082157;116.279363,40.081357;116.279924,40.080923;116.280327,40.080611;116.281141,40.079861;116.282208,40.07871;116.28258,40.078425;116.283844,40.076923;116.284016,40.076659;116.285778,40.07395;116.286577,40.072749;116.288505,40.069382;116.288865,40.068827;116.289532,40.067801';
+          //     lngLats = lngLatsStr.split(';').map((item) => {
+          //         const lngLatArray =  item.split(',').map(str => {
+          //             return Number(str);
+          //         });
+          //         return {
+          //             lng: lngLatArray[0],
+          //             lat: lngLatArray[1],
+          //         }
+          //     })
+          //     let line = new Line(
+          //         this._context,
+          //         this._regl, 
+          //         lngLats, 
+          //         { color:[1, 0.7, 0.2, 1], width:6 }, 
+          //         this._options,
+          //     );
+          //     lines.push(line);
+          // }
+          features.forEach(function (feature) {
+              feature.repaint();
           });
+          if (newFeature) {
+              newFeature.repaint();
+          }
       };
       return Editor;
   }());
@@ -10875,9 +11347,6 @@
     DomUtil: {
       remove,
       setPosition
-    },
-    Browser: {
-      retina
     }
   } = L__default['default']; // 继承render
 
@@ -10895,15 +11364,6 @@
 
       this._draw();
     },
-    _draw: function () {
-      // webgl 编辑器，初始化
-      this._editor = new Editor(this.gl, {
-        lngLatsToPoints: this._LngLatsToPointsCall(),
-        getModelMatrix: this._getModelMatrixCall()
-      }); // 初始化绘制
-
-      this._editor.repaint();
-    },
     _initContainer: function () {
       var container = this._container = document.createElement('canvas');
       on(container, 'mousemove', this._onMouseMove, this);
@@ -10915,6 +11375,68 @@
         throw new Error('Webgl is not supported in your broswer');
       }
     },
+    _draw: function () {
+      // webgl 编辑器，初始化
+      this._editor = new Editor(this.gl, {
+        lngLatsToPoints: this._LngLatsToPointsCall(),
+        getModelMatrix: this._getModelMatrixCall()
+      }); // 初始化绘制
+
+      this._editor.repaint(); // 拾取事件
+
+
+      this._editor._context.on('picked', featureId => {
+        this.fire('picked', {
+          featureId
+        });
+      });
+    },
+
+    /**
+     * 开始编辑哪种要素
+     * @param {*} featureType 要素类型
+     * @param {*} finish 绘制结束的回调函数
+     */
+    start: function (featureType, finish) {
+      const {
+        doubleClickZoom
+      } = this._map.options; // 禁用双击放大事件
+
+      if (doubleClickZoom) {
+        this._map.doubleClickZoom.disable();
+      }
+
+      let clickFn = null,
+          moveFn = null; // 通过回调，将editor和具体的地图api分割开，方便将来与其它地图API做适配，比如：mapbox
+
+      this._editor.start(featureType, (mouseClick, mouseMove) => {
+        clickFn = evt => {
+          const lngLat = evt.latlng;
+          mouseClick(lngLat, lngLats => {
+            this._map.off('click', clickFn);
+
+            this._map.off('mousemove', moveFn);
+
+            finish(lngLats); // 绘制完成恢复双击放大
+
+            if (doubleClickZoom) {
+              setTimeout(() => {
+                this._map.doubleClickZoom.enable();
+              }, 200);
+            }
+          });
+        };
+
+        moveFn = evt => {
+          const lngLat = evt.latlng;
+          mouseMove(lngLat);
+        };
+
+        this._map.on('click', clickFn);
+
+        this._map.on('mousemove', moveFn);
+      });
+    },
     _update: function () {
       if (this._map._animatingZoom && this._bounds) {
         return;
@@ -10925,7 +11447,7 @@
       const b = this._bounds,
             container = this._container,
             size = b.getSize(),
-            m = retina ? 2 : 1;
+            m = window.devicePixelRatio;
       setPosition(container, b.min);
       container.width = m * size.x;
       container.height = m * size.y;

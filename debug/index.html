@@ -20,10 +20,37 @@
             width: 100%;
             height: 100%;
         }
+
+        ul{
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 0;
+            background-color: aliceblue;
+            display: flex;
+            z-index: 1000;
+        }
+
+        li{
+            padding: 10px 30px;
+            list-style: none;
+        }
     </style>
 </head>
 <body>
     <div id="mapid"></div>
+    <ul>
+        <li id="point">
+            点
+        </li>
+        <li id="line">
+            线
+        </li>
+        <li id="polygon">
+            面
+        </li>
+    </ul>
     <script>
         window.process = {
             browser: true
@@ -36,6 +63,19 @@
 
         var drawEditLayer = L.drawEdit();
         mymap.addLayer(drawEditLayer);
+
+        // 拾取
+        drawEditLayer.on('picked', (evt) => {
+            console.log(evt);
+        });
+
+        const line = document.getElementById('line');
+        line.onclick = function lineClick() {
+            // 开始绘制
+            drawEditLayer.start(1, ({ id, lngLats }) => {
+                console.log(id, lngLats);
+            });
+        };
     </script>
 </body>
 </html>
