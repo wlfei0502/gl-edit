@@ -11,11 +11,13 @@ const {
 
 // 继承render
 const WebglLeaflet = Renderer.extend({
+
     getEvents: function () {
         var events = Renderer.prototype.getEvents.call(this);
         // 鼠标拖动实时绘制
         events.move = this._update;
         events.zoom = this._update;
+        events.movestart = this._movestart;
         return events;
     },
 
@@ -47,13 +49,29 @@ const WebglLeaflet = Renderer.extend({
             getModelMatrix: this._getModelMatrixCall()
         });
 
-        // 初始化绘制
-        this._editor.repaint();
-
         // 拾取事件
-        this._editor._context.on('picked', (featureId) => {
-            this.fire('picked', {
-                featureId
+        this._editor._context.on('picked:click picked:mousemove', ({
+            type,
+            feature
+        }) => {
+            if (!feature) {
+                console.log('error:', feature._id);
+                return;
+            }
+
+            if (type === 'mousemove') {
+                type = 'hover';
+            }
+
+            this.fire(`picked:${type}`, {
+                feature
+            });
+        });
+
+        // 绘制完成事件
+        this._editor._context.on('finish', (feature) => {
+            this.fire('finish', {
+                feature
             });
         });
     },
@@ -61,9 +79,8 @@ const WebglLeaflet = Renderer.extend({
     /**
      * 开始编辑哪种要素
      * @param {*} featureType 要素类型
-     * @param {*} finish 绘制结束的回调函数
      */
-    start: function (featureType, finish) {
+    start: function (featureType) {
         const { doubleClickZoom } = this._map.options;
         // 禁用双击放大事件
         if (doubleClickZoom) {
@@ -76,11 +93,9 @@ const WebglLeaflet = Renderer.extend({
         this._editor.start(featureType, (mouseClick, mouseMove) => {
             clickFn = (evt) => {
                 const lngLat = evt.latlng;
-                mouseClick(lngLat, (lngLats) => {
+                mouseClick(lngLat, () => {
                     this._map.off('click', clickFn);
                     this._map.off('mousemove', moveFn);
-
-                    finish(lngLats);
 
                     // 绘制完成恢复双击放大
                     if (doubleClickZoom) {
@@ -101,9 +116,27 @@ const WebglLeaflet = Renderer.extend({
         });
     },
 
-    _update: function () {
-        if (this._map._animatingZoom && this._bounds) { return; }
+    render (features, retain) {
+        if (!this._editor) {
+            throw new Error('gl-editor 初始化失败！');
+        }
 
+        this._editor.render(features, retain);
+    },
+
+    getFeature (featureId) {
+        this._editor.getFeature(featureId);
+    },
+
+    changeIds (ids) {
+        this._editor.changeIds(ids);
+    },
+
+    clear () {
+        this._editor.clear();
+    },
+
+    _update: function () {
         Renderer.prototype._update.call(this);
 
         const b = this._bounds,
@@ -119,7 +152,9 @@ const WebglLeaflet = Renderer.extend({
         container.style.height = size.y + 'px';
 
         // 地图移动，视野变化，都需要重绘
-        this._editor && this._editor.repaint();
+        if (this._editor) {
+            this._editor.repaint();
+        }
     },
 
     _LngLatsToPointsCall () {
@@ -143,6 +178,12 @@ const WebglLeaflet = Renderer.extend({
         // var point = this._map.mouseEventToLayerPoint(e);
 
         // console.log(point);
+    },
+
+    _movestart () {
+        if (this._editor) {
+            this._editor._context.setMapStatus('movestart');
+        }
     },
 
     _onMouseMove: function (e) {

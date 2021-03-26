@@ -64,18 +64,82 @@
         var drawEditLayer = L.drawEdit();
         mymap.addLayer(drawEditLayer);
 
-        // 拾取
-        drawEditLayer.on('picked', (evt) => {
-            console.log(evt);
+        // 拾取事件
+        drawEditLayer.on('picked:mousemove', (evt) => {
+            console.log(evt, evt.feature.getId());
         });
+
+        // 绘制完成事件
+        drawEditLayer.on('finish', (evt) => {
+            console.log(evt, evt.feature.getId());
+        });
+
+        const point = document.getElementById('point');
+        point.onclick = function pointClick() {
+            // 开始绘制
+            drawEditLayer.start('point');
+        };
 
         const line = document.getElementById('line');
         line.onclick = function lineClick() {
             // 开始绘制
-            drawEditLayer.start(1, ({ id, lngLats }) => {
+            drawEditLayer.start('line');
+        };
+
+        const polygon = document.getElementById('polygon');
+        polygon.onclick = function polygonClick() {
+            // 开始绘制
+            drawEditLayer.start('polygon', ({ id, lngLats }) => {
                 console.log(id, lngLats);
             });
         };
+
+        const lngMin = 115.84327697753908;
+        const lngMax = 116.72218322753908;
+        const latMin = 39.939224840791965;
+        const latMax = 40.242846824049785;
+
+        const lngStep = (116.72218322753908 - 115.84327697753908)/200;
+        const latStep = (40.242846824049785 - 39.939224840791965)/100;
+
+        const polygons = [];
+
+        for (let g = 0; g < 10; g++) {
+            for (let t = 0; t < 10; t++) {
+                const lt = { lng:lngMin + g*lngStep, lat:latMax - t*latStep };
+                const rt = { lng:lngMin + (g+1)*lngStep, lat:latMax - t*latStep };
+                const rb = { lng:lngMin + (g+1)*lngStep, lat:latMax - (t+1)*latStep };
+                const lb = { lng:lngMin + g*lngStep, lat:latMax - (t+1)*latStep };
+
+                const info = { id: '0', lngLats: [lt, rt, rb, lb, lt], style: { color: [255, 0, 0, 120] }};
+                polygons.push(info);
+            }
+        }
+
+        // drawEditLayer.render({
+        //     polygon:polygons
+        // });
+
+        // setTimeout(() => {
+        //     const lines = [], lngStep = 10;
+        //     for (let g = 0; g < 10; g++) {
+        //         for (let t = 0; t < 10; t++) {
+        //             const lt = { lng:lngMin + g*lngStep, lat:latMax - t*latStep };
+        //             const rt = { lng:lngMin + (g+1)*lngStep, lat:latMax - t*latStep };
+        //             const rb = { lng:lngMin + (g+1)*lngStep, lat:latMax - (t+1)*latStep };
+        //             const lb = { lng:lngMin + g*lngStep, lat:latMax - (t+1)*latStep };
+
+        //             const info = { id: '0', lngLats: [lt, rt, rb, lb], style: { width:3, color: [255, 0, 0, 120] }};
+        //             lines.push(info);
+        //         }
+        //     }
+        //     drawEditLayer.render({
+        //         line:lines
+        //     });
+        // }, 5000);
+    </script>
+    <script>
+        (function(){var script=document.createElement('script');script.onload=function(){var stats=new Stats();document.body.appendChild(stats.dom);requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop)});};script.src='//mrdoob.github.io/stats.js/build/stats.min.js';document.head.appendChild(script);})()
     </script>
 </body>
 </html>

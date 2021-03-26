@@ -1,46 +1,29 @@
 import REGL from "regl";
-import { LngLat, LineStyle, ShapeConfig, FeatureType, EditorStatus } from "./types";
+import { LngLat, Modes } from "./types";
 import Shape from "./shape";
+import Node from './node';
 
-import { links, buffer, generateUUID } from '../util/util.js';
-
-import vert from '../shaders/line.vertex.glsl';
-import frag from '../shaders/line.fragment.glsl';
 import Context from "./context";
 
-const FLOAT_BYTES = Float32Array.BYTES_PER_ELEMENT;
+import { links, buffer } from '../util/util.js';
+
+const DEFAULT_INFO = {
+    id: '0',
+    lngLats: [], 
+    style: {
+        width: 3,
+        color: [255, 255, 255, 255]
+    }
+}
 
 class Line extends Shape {
-    _id: string;                          // 唯一ID
-    _context: Context                     // 上下文环境
-    _lngLats: LngLat[];                   // 线条地理坐标
-    _style: LineStyle;                    // 线条样式：宽度、颜色
-    _drawCommand: REGL.DrawCommand;       // 绘制命令
-    _positionBuffer: REGL.Buffer;         // 顶点位置缓存
-    _offsetBuffer: REGL.Buffer;           // 顶点向两侧偏移方向缓存
-    _elements: REGL.Elements;             // 顶点索引
-    _pickColor: number [];                // 负责拾取的功能的颜色
+    offsetBuffer: REGL.Buffer;           // 顶点向两侧偏移方向缓存
+    nodes: Node [] = [];
 
-    constructor (
-        context:Context, 
-        regl: REGL.Regl,
-        info = {
-            id: '0',
-            lngLats: [], 
-            style: {
-                width: 3,
-                color: [255, 255, 255, 255]
-            }
-        }, 
-        options: ShapeConfig
-    ) {
-        super(regl, options);
+    constructor (context: Context, info: any = DEFAULT_INFO) {
+        super(context, info);
         
-        this._context = context;
-        this._id = info.id === '0' ? generateUUID() : info.id;
-        this._lngLats = info.lngLats;
-        this._style = info.style;
-        this._pickColor = this._context.color.getColor(this._id); 
+        this.featureType = 'line';
 
         // 初始化绘制配置
         this._initDraw();
@@ -50,104 +33,24 @@ class Line extends Shape {
     }
 
     _initDraw () {
-        this._positionBuffer = this._regl.buffer({
+        const { _regl } = this._context;
+
+        this.positionBuffer = _regl.buffer({
             usage: 'dynamic',
             type: 'float',
         });
 
-        this._offsetBuffer = this._regl.buffer({
+        this.offsetBuffer = _regl.buffer({
             usage: 'dynamic',
             type: 'float',
         });
-
-        const uniforms = {
-            model: (context, props) => props.modelMatrix,
-            color: (context, props) => props.color,
-            thickness: (context, props) => props.width,
-            miter: 1,
-            aspect: ({ viewportWidth, viewportHeight }) => {
-                return viewportWidth / viewportHeight;
-            },
-            height: ({ viewportHeight, pixelRatio }) => {
-                return viewportHeight / pixelRatio;
-            }
-        }
-
-        const attributes = {
-            prevPosition: {
-                buffer: this._positionBuffer,
-                offset: 0
-            },
-            currPosition: {
-                buffer: this._positionBuffer,
-                offset: FLOAT_BYTES * 2 * 2
-            },
-            nextPosition: {
-                buffer: this._positionBuffer,
-                offset: FLOAT_BYTES * 2 * 4
-            },
-            offsetScale: this._offsetBuffer
-        }
         
-        const elements = this._elements = this._regl.elements({
+        this.elements = _regl.elements({
             primitive: 'triangles',
             usage: 'dynamic',
             type: 'uint16',
-        })
-
-        // 预编译着色器程序
-        this._drawCommand = this._regl({
-            vert,
-            frag,
-            uniforms,
-            attributes,
-            elements,
-        });
-    }
-
-    _initEvent () {
-        // 拾取事件
-        this._context.on('pick-start', this._pick, this);
-    }
-
-    /**
-     * 拾取
-     * @param pickInfo 拾取所需要的信息, 鼠标所在位置坐标和帧缓冲区
-     */
-    _pick (pickInfo) {
-        if (this._lngLats.length === 0) {
-            return;
-        }
-
-        const { x, y, fbo } = pickInfo;
-
-        // 在帧缓冲区上绘制，拾取
-        this._regl({ framebuffer: fbo })(() => {
-            // 清除缓冲区
-            this._regl.clear({
-                color: [0, 0, 0, 0],
-                depth: 1
-            });
-
-            // 绘制到缓冲区
-            this._draw({ color: this._pickColor });
-
-            // 拾取鼠标点击位置的颜色
-            const rgba = this._regl.read({
-                x,
-                y,
-                width: 1,
-                height: 1
-            });
-
-            // 颜色分量组成的key
-            const colorKey = rgba.join('-');
-            // 颜色key对应的uuid
-            const uuid = this._context.color.getUUID(colorKey);
-            // uuid存在，说明拾取到对象了
-            if (uuid) {
-                this._context.fire('picked', uuid);
-            }
+            count: 0,
+            length: 0
         });
     }
 
@@ -156,40 +59,47 @@ class Line extends Shape {
      * @param register 注册鼠标点击和移动
      */
     waiting (register) {
-        
         // 地图点击事件
         const mapClick = ( lngLat: LngLat, finish) => {
-            const len = this._lngLats.length;
+            // 进入编辑模式
+            this._context.enter(Modes.EDITING);
 
+            const len = this._lngLats.length;
             if (len > 1) {
                 const lastLngLat = this._lngLats[len - 2];
+
+                const lastPoint = this.project(lastLngLat);
+                const currentPoint = this.project(lngLat);
+                const xDis = Math.abs(lastPoint[0] - currentPoint[0]);
+                const yDis = Math.abs(lastPoint[1] - currentPoint[1]);
                 // 最后一个点点击的位置相同即完成绘制
                 // 之后需要添加缓冲区，只要点击到缓冲区内，就代表绘制结束
-                if (lastLngLat.lng === lngLat.lng && lastLngLat.lat === lngLat.lat) {
+                if (xDis <= this._context.pixDis && yDis <= this._context.pixDis) {
                     // 移除最后一个移动点
                     this._lngLats.splice(len - 1, 1);
-
+                    this.nodes.splice(len - 1, 1);
+                    this.nodes[this.nodes.length - 1].style.size = 18;
                     // 完成绘制的回调函数
-                    finish({
-                        id: this._id,
-                        lngLats:this._clone()
-                    });
-
-                    this._context.fire('draw-finish');
+                    finish();
+                    this._context.fire('draw-finish', this);
                     return;
                 } else {
                     this._lngLats[len - 1] = lngLat;
+                    this.nodes[len - 1].setLngLats(lngLat);
                 }
             } else {
                 // 首次绘制，需要为线添加两个点
                 this._lngLats.push(lngLat);
+                // 节点
+                const lastIndex = this._lngLats.length - 1;
+                this.createNode (lngLat, lastIndex);
             }
 
             // 添加移动点
             this._lngLats.push(lngLat);
-
-            // 重绘
-            this._context.fire('redraw');
+            // 节点
+            const lastIndex = this._lngLats.length - 1;
+            this.createNode (lngLat, lastIndex);
         }
 
         // 鼠标在地图上移动事件
@@ -198,19 +108,51 @@ class Line extends Shape {
 
             if (len === 0) {
                 return;
-            } else if (len === 1) {
-                this._lngLats.push(lngLat);
             }
 
             this._lngLats[len - 1] = lngLat;
-            this._context.fire('redraw');
+            this.nodes[len - 1].setLngLats(lngLat);
         }
 
         // 注册监听函数
         register(mapClick, mapMove);
     }
 
-    _draw (props) {
+    createNode (lngLat, index):Node {
+        // 节点
+        const node = new Node(this._context, {
+            id: `${this._id}_node_${index}`,
+            attachId: this._id,
+            lngLats: [lngLat],
+            style:{
+                color: [255, 255, 255, 255],
+                size: 14.0
+            }
+        });
+
+        this.nodes.push(node);
+
+        return node;
+    }
+
+    nodeRestyle () {
+        const lastIndex = this.nodes.length - 1;
+
+        // 重新计算node的size
+        this.nodes.forEach((node, index) => {
+            let size = 14.0;
+
+            if (index === 0 || index === lastIndex) {
+                size = 18.0;
+            }
+
+            node.setStyle({
+                size
+            }, false);
+        });
+    }
+
+    repaint () {
         if (this._lngLats.length < 2) {
             return;
         } else if (this._lngLats.length === 2) {
@@ -224,7 +166,7 @@ class Line extends Shape {
         const len = points.length;
 
         // 顶点位置平铺成一维的
-        let positions = [];
+        const positions = [];
         for (let p = 0; p < points.length; p++) {
             const point = points[p];
             positions.push(...point);
@@ -245,62 +187,54 @@ class Line extends Shape {
 
         // 更新缓冲区
         // 顶点更新
-        this._positionBuffer(positionsDup);
+        this.positionBuffer(positionsDup);
         // 法向量方向更新
-        this._offsetBuffer(offsetDup);
+        this.offsetBuffer(offsetDup);
         // 索引更新
-        this._elements(indices);
+        this.elements(indices);
 
-        // 模型变换矩阵
-        const modelMatrix = this.getModelMatrix();
-    
-        this._drawCommand({
-            modelMatrix,
-            width: this._style.width,
-            ...props
-        });
-    }
-
-    /**
-     * 重绘
-     */
-    repaint () {
-        this._draw(this._style);
+        // 重新设置每个节点的样式
+        this.nodeRestyle();
     }
     
-    get () {
-        return this._lngLats;
-    }
+    /**
+     * 点击的是空白区域, 只保留首尾节点
+     */
+    unselect () {
+        if (this.nodes.length < 2) {
+            return;
+        }
 
-    add () {
+        const first = this.nodes[0];
+        const last = this.nodes[this.nodes.length - 1];
 
-    }
+        first.setId(`${this._id}_node_0`);
+        last.setId(`${this._id}_node_1`);
 
-    delete () {
+        this.nodes = [first, last];
 
-    }
-
-    update () {
-
+        // 重绘
+        this._context.fire('repaint');
     }
 
     /**
-     * 移除该要素
+     * 要素被选中
      */
-    destroy () {
-        this._lngLats = [];
-        this._context.fire('redraw');
-    }
+    select () {
+        this.nodes = [];
+        
+        this._lngLats.forEach((lngLat, index) => {
+            const node = this.createNode (lngLat, index);
 
-    /**
-     * 坐标克隆返回，防止上层应用修改该值
-     */
-    _clone () {
-        return this._lngLats.map(lngLat => {
-            return {
-                ...lngLat
+            if (index === 0 || index === this._lngLats.length - 1) {
+                node.setStyle({
+                    size: 18
+                }, false);
             }
         });
+
+        // 重绘
+        this._context.fire('repaint');
     }
 }
 

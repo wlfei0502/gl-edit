@@ -3,6 +3,8 @@ import commonjs from '@rollup/plugin-commonjs';
 import rollupTypescript from '@rollup/plugin-typescript';
 import babel from 'rollup-plugin-babel';
 import glslify from 'rollup-plugin-glslify';
+import image from '@rollup/plugin-image';
+import json from '@rollup/plugin-json';
 
 import { uglify } from 'rollup-plugin-uglify';
 
@@ -26,6 +28,8 @@ export default {
         nodeResolve(),
         glslify(),
         commonjs(),
+        image(),
+        json(),
         uglify(),
     ]
 };

@@ -1,3 +1,5 @@
+import REGL from 'regl';
+
 /**
  * 经纬度类型
  */
@@ -53,20 +55,67 @@ export interface LineStyle {
 }
 
 /**
+ * 多边形样式
+ */
+export interface PolygonStyle {
+    color: number[],
+}
+
+/**
  * 标绘信息
  */
 export enum FeatureType {
-    POINT,
-    LINE,
-    POLYGON
+    POLYGON='polygon',
+    BORDER='border',
+    LINE='line',
+    NODE='node',
+    POINT='point',
 }
 
 export interface FeatureInfo {
     type: FeatureType,
 }
 
-export enum EditorStatus {
-    WATING,
-    EDITING,
-    END
+export enum Modes {
+    IDLE='idle',
+    WATING='waiting',
+    EDITING='editing',
+    END='end',
+    POINT_SELECT='point_select',
+    LINE_SELECT='line_select',
+    POLYGON_SELECT='polygon_select',
+    NODE_SELECT='node_select',
+}
+
+export interface PointProps {
+    positionBuffer: number[],
+    texCoordBuffer: number[],
+    modelMatrix: number[],
+    elements: REGL.Elements
+    texture: REGL.Texture,
+    color: REGL.Vec4,
+    fbo: boolean
+}
+
+export interface LineProps {
+    positionBuffer: number[],
+    offsetBuffer: number[],
+    elements: REGL.Elements
+    modelMatrix: number[],
+    color: REGL.Vec4,
+    width: number,
+}
+
+export interface PolygonProps {
+    positionBuffer: number[],
+    modelMatrix: number[],
+    elements: REGL.Elements
+    color: REGL.Vec4,
+}
+
+export interface NodeProps {
+    positionBuffer: number[],
+    modelMatrix: number[],
+    color: REGL.Vec4,
+    size: number
 }
