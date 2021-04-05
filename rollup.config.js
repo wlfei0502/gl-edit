@@ -7,11 +7,11 @@ import image from '@rollup/plugin-image';
 import json from '@rollup/plugin-json';
 
 export default {
-    input: 'src/index.ts',
+    input: 'src/index.js',
     output: {
-        file: 'dist/leaflet-draw-edit.dev.js',
+        file: 'dist/gl-edit.dev.js',
         format: 'umd',
-        name: 'L.drawEdit',
+        name: 'glEdit',
         globals: {
             leaflet:'L'
         }

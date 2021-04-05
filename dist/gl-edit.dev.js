@@ -1,7 +1,7 @@
 (function (global, factory) {
   typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('leaflet')) :
   typeof define === 'function' && define.amd ? define(['leaflet'], factory) :
-  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, (global.L = global.L || {}, global.L.drawEdit = factory(global.L)));
+  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.glEdit = factory(global.L));
 }(this, (function (L) { 'use strict';
 
   function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
@@ -86,21 +86,6 @@
 
   };
   /**
-  * 经纬度转成像素函数
-  * @param {*} callback 经纬度转成像素函数
-  */
-
-  function lngLatToPoint(callback) {
-    return lngLat => {
-      const {
-        x,
-        y
-      } = callback(lngLat); // 对本身的变换加上平移值才是最后的变换结果
-
-      return [x, y];
-    };
-  }
-  /**
    * 去除首尾空格
    * @param {*} str 
    */
@@ -134,13 +119,108 @@
     });
     return uuid;
   }
-  function base64ToUint8Array(base64, callback) {
-    const img = new Image();
-    img.src = base64;
+  /**
+   * 对象深度合并
+   * @param {*} obj1 
+   * @param {*} obj2 
+   * @param {*} cache 
+   */
 
-    img.onload = function () {
-      callback(img);
-    };
+  function deepMerge(obj1, obj2, cache) {
+    //防止死循环，这里需要把循环过的对象添加到数组中
+    cache = !Array.isArray(cache) ? [] : cache; //因为后面只对obj2进行遍历，所以这里只要判断obj2就可以了，如果obj2已经比较合并过了则直接返回obj2，否则在继续合并    
+
+    if (~cache.indexOf(obj2) > 0) return obj2;
+    cache.push(obj2);
+    const isPlain1 = isPlainObject(obj1);
+    const isPlain2 = isPlainObject(obj2); //obj1或obj2中只要其中一个不是对象，则按照浅合并的规则进行合并
+
+    if (!isPlain1 || !isPlain2) return shallowMerge(obj1, obj2); //如果都是对象，则进行每一层级的递归合并
+
+    let keys = [...Object.keys(obj2), ...Object.getOwnPropertySymbols(obj2)];
+    keys.forEach(function (key) {
+      obj1[key] = deepMerge(obj1[key], obj2[key], cache); //这里递归调用
+    });
+    return obj1;
+  }
+  /**
+   * 浅合并
+   * @param {*} obj1 
+   * @param {*} obj2 
+   */
+
+  function shallowMerge(obj1, obj2) {
+    let isPlain1 = isPlainObject(obj1);
+    let isPlain2 = isPlainObject(obj2); //只要obj1不是对象，那么不管obj2是不是对象，都用obj2直接替换obj1
+
+    if (!isPlain1) return obj2; //走到这一步时，说明obj1肯定是对象，那如果obj2不是对象，则还是以obj1为主
+
+    if (!isPlain2) return obj1; //如果上面两个条件都不成立，那说明obj1和obj2肯定都是对象， 则遍历obj2 进行合并
+
+    let keys = [...Object.keys(obj2), ...Object.getOwnPropertySymbols(obj2)];
+    keys.forEach(function (key) {
+      obj1[key] = obj2[key];
+    });
+    return obj1;
+  }
+  /**
+   * 检测是否是纯对象isPlainObject 
+   * @param {*} obj 
+   */
+
+  function isPlainObject(obj) {
+    if (obj && Object.prototype.toString.call(obj) === "[object Object]") {
+      return true;
+    }
+
+    return false;
+  }
+  /**
+   * Get the first item that pass the test
+   * by second argument function
+   *
+   * @param {Array} list
+   * @param {Function} f
+   * @return {*}
+   */
+
+  function find(list, f) {
+    return list.filter(f)[0];
+  }
+  /**
+   * Deep copy the given object considering circular structure.
+   * This function caches all nested objects and its copies.
+   * If it detects circular structure, use cached copy to avoid infinite loop.
+   *
+   * @param {*} obj
+   * @param {Array<Object>} cache
+   * @return {*}
+   */
+
+  function deepCopy(obj, cache = []) {
+    // just return if obj is immutable value
+    if (obj === null || typeof obj !== 'object') {
+      return obj;
+    } // if obj is hit, it is in circular structure
+
+
+    const hit = find(cache, c => c.original === obj);
+
+    if (hit) {
+      return hit.copy;
+    }
+
+    const copy = Array.isArray(obj) ? [] : {}; // put the copy into cache at first
+    // because we want to refer it in recursive deepCopy
+
+    cache.push({
+      original: obj,
+      copy
+    });
+    Object.keys(obj).forEach(key => {
+      copy[key] = deepCopy(obj[key], cache);
+    });
+    return copy;
   }
 
   /*! *****************************************************************************
@@ -184,38 +264,6 @@
       };
       return __assign.apply(this, arguments);
   };
-
-  /** @deprecated */
-  function __spreadArrays() {
-      for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
-      for (var r = Array(s), k = 0, i = 0; i < il; i++)
-          for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
-              r[k] = a[j];
-      return r;
-  }
-
-  /**
-   * 标绘信息
-   */
-  var FeatureType;
-  (function (FeatureType) {
-      FeatureType["POLYGON"] = "polygon";
-      FeatureType["BORDER"] = "border";
-      FeatureType["LINE"] = "line";
-      FeatureType["NODE"] = "node";
-      FeatureType["POINT"] = "point";
-  })(FeatureType || (FeatureType = {}));
-  var Modes;
-  (function (Modes) {
-      Modes["IDLE"] = "idle";
-      Modes["WATING"] = "waiting";
-      Modes["EDITING"] = "editing";
-      Modes["END"] = "end";
-      Modes["POINT_SELECT"] = "point_select";
-      Modes["LINE_SELECT"] = "line_select";
-      Modes["POLYGON_SELECT"] = "polygon_select";
-      Modes["NODE_SELECT"] = "node_select";
-  })(Modes || (Modes = {}));
 
   var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
 
@@ -9279,6 +9327,10 @@
    */
   var Evented = /** @class */ (function () {
       function Evented() {
+          // 事件集合
+          this._events = {};
+          // 事件派发计数
+          this._firingCount = 0;
           this._events = {};
       }
       /**
@@ -9426,76 +9478,44 @@
       return Evented;
   }());
 
-  var Color = /** @class */ (function () {
-      function Color() {
-          this._colors = {};
-          this._uuids = {};
-          this._currentColor = [0, 0, 0, 0];
-      }
-      Color.prototype.getColor = function (uuid) {
-          function recursive(color, index) {
-              var part = color[index];
-              if (part + 1 <= 255) {
-                  part = part + 1;
-                  color[index] = part;
-                  return;
-              }
-              else {
-                  color[index] = 0;
-              }
-              recursive(color, index + 1);
-          }
-          recursive(this._currentColor, 0);
-          // 颜色与uuid一一对应
-          var colorKey = this._currentColor.join('-');
-          this._colors[colorKey] = uuid;
-          this._uuids[uuid] = colorKey;
-          return __spreadArrays(this._currentColor);
-      };
-      Color.prototype.getUUID = function (colorKey) {
-          return this._colors[colorKey];
-      };
-      Color.prototype.changeUuid = function (oldUuid, newUuid) {
-          var colorKey = this._uuids[oldUuid];
-          this._uuids[newUuid] = colorKey;
-          this._colors[colorKey] = newUuid;
-          delete this._uuids[oldUuid];
-      };
-      return Color;
-  }());
+  /**
+   * 标绘信息
+   */
+  var FeatureType;
+  (function (FeatureType) {
+      FeatureType["POLYGON"] = "polygon";
+      FeatureType["BORDER"] = "border";
+      FeatureType["LINE"] = "line";
+      FeatureType["NODE"] = "node";
+      FeatureType["POINT"] = "point";
+  })(FeatureType || (FeatureType = {}));
+  /**
+   * 编辑模式
+   */
+  var Modes;
+  (function (Modes) {
+      Modes["IDLE"] = "idle";
+      Modes["WATING"] = "waiting";
+      Modes["EDITING"] = "editing";
+      Modes["END"] = "end";
+      Modes["POINT_SELECT"] = "point_select";
+      Modes["LINE_SELECT"] = "line_select";
+      Modes["POLYGON_SELECT"] = "polygon_select";
+      Modes["NODE_SELECT"] = "node_select";
+  })(Modes || (Modes = {}));
 
-  var img = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAeklEQVR4AWMgAvABcQEQFwGxEgMVQNq6desKV69eXQIxlHLQ8P//fzAGsQeHgaMGOiAZ6ECMBiVocmhAw7gMcMCuFpFOi9avX18McQUmRjcNlzqQGbB0WgBKuJQaCDIDZBYsa6VR6mWoGXwkR8qwS4ejBlJewFJeBQAAqLzY76D65MUAAAAASUVORK5CYII=";
-
-  var img$1 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAABG0lEQVR4AbWTMWi0QBBG/+LA/hrZ5u/PHvu+Lw6s7QkBk85Nawqxuz6SUsukr84eu5QBSXoCImazDxS8DZG4Sz54MIzjY53Ff38VNXHWHDU7ZyFpmkZFUaQ8z3vVvRvN3lZ4Rjan6zolpVRCiA/97KQ5bBUeOZmZvu9VWZYqDMNPPfO0RbjjMznZT5l2vCm3aZqagiVyq3DPzvjMhdA5J3ZmCP9rYo1chRlmjRy4AEMY13V9rVtyDWYm6bc8Gzu7eHEYhrssyx6Bevnst3u+kPm+/z5fFDU9ayGnQpTneQnU9KyFRVE8mEJ61kIQQrwhAmqnHUKSJPUspHYWjuMogyB4AWpnIbRtew/UNsK4qqorXliDGWZXTTa/3hfS9r3bdRtDEgAAAABJRU5ErkJggg==";
-
-  var img$2 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAABCElEQVR4AbWTAWbGQBCFi0hIBAIECkAukLOEAGEPUEULZE8RAaUEQAJoe4PkHiUHaFsWOp3HLrGVrv3X/3hWJuMz85K9uZZIe2U37CgYCG3bRm3bUpIk71x7YBeXAlfAjPZ9JykllWX5ze9GduULbDCZLaUUTdNEdV3/cM+LDzDCmpjsTDpjLz32fX8E2Ja+wAKZYc0DMFgjMrOAt2zBlg4L9NrACh/AAoplWe65JP8zejT0j16tzE4hXde9ZVn2iRPPzpxdwDRNv4gFaDBwGIbnOI4VoMETAoapnlim5gl0w7yBWAvrYU0DCwLq4AlQAwieMM/zD5yhQDHP853rx0YPet04z6v3C3dEyAkWQDzRAAAAAElFTkSuQmCC";
-
-  var img$3 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAA0klEQVR4Ae2TMQ6CQBBFLUjo6WjsuQBnIaHeAxgL7ZhjcABqKPUIcA8TbmBC4zjfYNQxuI5EK3/ymnF82f0bFt8Kj7RCJgSzhUjXdZznOYdheJDZRog+FbaQXdP3PRMRx3F8lN9KIbEKM5xMZxgGrqqK0zQ9yc7OIgxwTZxsKmPHpmyLongQKMgqjNAZrnkTzk+JzpRwKTiBPLjLrkqCB1BC1zTNWkb0CuyM0qfsVWeTEs27Pes/8T2zhEqgZn/hrx/Fg03o6rpe+WTYwa7HZf/0zi/2zDOd9wpPAAAAAElFTkSuQmCC";
-
-  var cursors = {
-      waiting: img,
-      editing: img,
-      point: img$1,
-      node: img$1,
-      line: img$2,
-      polygon: img$3
-  };
   /**
    * 图形绘制上下文，用来管理图形编辑的全局状态
    */
   var Context = /** @class */ (function (_super) {
       __extends(Context, _super);
       function Context(_a) {
-          var gl = _a.gl, shapeConfig = _a.shapeConfig;
+          _a.gl;
           var _this = _super.call(this) || this;
-          _this.mode = ''; // 当前所处的编辑模式：无|标点|标线|标面
+          // 当前所处的编辑模式：空闲|标点|标线|标面|选中
+          _this.mode = Modes.IDLE;
+          // 记录地图当前所处的状态，用来处理地图移动过程中不触发拾取动作
           _this.mapStatus = '';
-          _this.pixDis = 3; // 用户选中要素的缓存区大小
-          _this._hover = false;
-          _this._gl = gl;
-          _this._regl = regl_unchecked(_this._gl);
-          _this._shapeConfig = shapeConfig;
-          _this.color = new Color();
           return _this;
       }
       /**
@@ -9504,26 +9524,9 @@
        */
       Context.prototype.enter = function (mode) {
           this.mode = mode;
-          this.hover(this.mode, false);
       };
       Context.prototype.exit = function () {
           this.mode = Modes.IDLE;
-          this.hover(this.mode, false);
-      };
-      Context.prototype.hover = function (type, isHover) {
-          var cursor = cursors[type];
-          if (!cursor) {
-              this._gl.canvas.style.cursor = 'inherit';
-              return;
-          }
-          this._hover = isHover;
-          this._gl.canvas.style.cursor = "url(" + cursor + ") 9 9,auto";
-      };
-      Context.prototype.out = function () {
-          if (!this._hover) {
-              return;
-          }
-          this.hover(this.mode, false);
       };
       /**
        * 地图操作状态
@@ -9535,1241 +9538,190 @@
       return Context;
   }(Evented));
 
-  var img$4 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAACACAYAAAB9V9ELAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuNi1jMTExIDc5LjE1ODMyNSwgMjAxNS8wOS8xMC0wMToxMDoyMCAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENDIDIwMTUgKFdpbmRvd3MpIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjZEQjBGQTEwOEI3NzExRUI4QTNCRjJBQTAyNDg0MjhDIiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjZEQjBGQTExOEI3NzExRUI4QTNCRjJBQTAyNDg0MjhDIj4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6NkRCMEZBMEU4Qjc3MTFFQjhBM0JGMkFBMDI0ODQyOEMiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6NkRCMEZBMEY4Qjc3MTFFQjhBM0JGMkFBMDI0ODQyOEMiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz6wfmQYAAA59ElEQVR42uxd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";
+  var pointVert = "#define GLSLIFY 1\nuniform mat3 model;attribute vec2 aPosition;attribute vec2 aTexCoord;varying vec2 uv;void main(){vec3 position=model*vec3(aPosition,1.0);gl_Position=vec4(position.xy,0.0,1.0);uv=aTexCoord;}"; // eslint-disable-line
 
-  var dasha1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 285,
-  	y: 394
-  };
-  var dian1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 313,
-  	y: 394
-  };
-  var dijishi1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 341,
-  	y: 394
-  };
-  var gaoerfu1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 397,
-  	y: 394
-  };
-  var gonganju1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 0,
-  	y: 426
-  };
-  var gongmu1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 28,
-  	y: 426
-  };
-  var gongjiaozhan1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 56,
-  	y: 426
-  };
-  var guangzhou1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 84,
-  	y: 426
-  };
-  var haerbin1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 112,
-  	y: 426
-  };
-  var guowaishoudu1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 140,
-  	y: 426
-  };
-  var hangzhou1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 168,
-  	y: 426
-  };
-  var hongb1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 196,
-  	y: 426
-  };
-  var jiansheyinhang1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 224,
-  	y: 426
-  };
-  var jiayouzhan1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 252,
-  	y: 426
-  };
-  var jiuba1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 280,
-  	y: 426
-  };
-  var jiudian1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 308,
-  	y: 426
-  };
-  var kfc1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 336,
-  	y: 426
-  };
-  var ktv1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 364,
-  	y: 426
-  };
-  var kunming1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 392,
-  	y: 426
-  };
-  var kafeiting1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 446,
-  	y: 305
-  };
-  var lanb1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 420,
-  	y: 426
-  };
-  var lanc1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 443,
-  	y: 204
-  };
-  var lvb1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 436,
-  	y: 333
-  };
-  var lvc1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 423,
-  	y: 233
-  };
-  var lvguan1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 422,
-  	y: 362
-  };
-  var ningbo1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 425,
-  	y: 394
-  };
-  var nonghang1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 439,
-  	y: 168
-  };
-  var qicheweixiu1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 425,
-  	y: 265
-  };
-  var quxian1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 422,
-  	y: 0
-  };
-  var shan1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 420,
-  	y: 56
-  };
-  var shangchang1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 438,
-  	y: 112
-  };
-  var shanghai1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 0,
-  	y: 454
-  };
-  var shenghui1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 28,
-  	y: 454
-  };
-  var shenyang1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 56,
-  	y: 454
-  };
-  var simiao1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 84,
-  	y: 454
-  };
-  var tingchechang1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 112,
-  	y: 454
-  };
-  var wuxi1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 140,
-  	y: 454
-  };
-  var xian1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 168,
-  	y: 454
-  };
-  var xican1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 196,
-  	y: 454
-  };
-  var xuexiao1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 224,
-  	y: 454
-  };
-  var yaodian1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 252,
-  	y: 454
-  };
-  var yinyueting1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 280,
-  	y: 454
-  };
-  var yiyuan1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 308,
-  	y: 454
-  };
-  var zhengfujiguan1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 336,
-  	y: 454
-  };
-  var zhengzhou1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 364,
-  	y: 454
-  };
-  var youju1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 392,
-  	y: 454
-  };
-  var youlechang1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 420,
-  	y: 454
-  };
-  var zhaoshangyinhang1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 474,
-  	y: 305
-  };
-  var zhongcan1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 448,
-  	y: 426
-  };
-  var zhongguoyinhang1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 448,
-  	y: 454
-  };
-  var zhuzhai1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 471,
-  	y: 204
-  };
-  var suzhout1 = {
-  	pixelRatio: 2,
-  	width: 36,
-  	height: 20,
-  	x: 464,
-  	y: 333
-  };
-  var aoment1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 24,
-  	x: 451,
-  	y: 233
-  };
-  var fuzhout1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 24,
-  	x: 450,
-  	y: 362
-  };
-  var jie2 = {
-  	pixelRatio: 2,
-  	width: 33,
-  	height: 19,
-  	x: 453,
-  	y: 394
-  };
-  var changzhout1 = {
-  	pixelRatio: 2,
-  	width: 25,
-  	height: 24,
-  	x: 476,
-  	y: 426
-  };
-  var gaoxiongt1 = {
-  	pixelRatio: 2,
-  	width: 30,
-  	height: 20,
-  	x: 467,
-  	y: 168
-  };
-  var jinant1 = {
-  	pixelRatio: 2,
-  	width: 25,
-  	height: 24,
-  	x: 476,
-  	y: 454
-  };
-  var beijinga1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 478,
-  	y: 362
-  };
-  var changzhoua1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 453,
-  	y: 265
-  };
-  var dongguana1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 477,
-  	y: 265
-  };
-  var dongguant1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 450,
-  	y: 0
-  };
-  var fuzhoua1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 474,
-  	y: 0
-  };
-  var gonghang1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 448,
-  	y: 56
-  };
-  var gongyuan1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 472,
-  	y: 56
-  };
-  var guangfa1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 466,
-  	y: 112
-  };
-  var guiyanga1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 0,
-  	y: 482
-  };
-  var guiyangt1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 24,
-  	y: 482
-  };
-  var hefeit1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 48,
-  	y: 482
-  };
-  var hefeia1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 72,
-  	y: 482
-  };
-  var honga1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 96,
-  	y: 482
-  };
-  var huaxia1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 120,
-  	y: 482
-  };
-  var jinana1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 144,
-  	y: 482
-  };
-  var lana1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 168,
-  	y: 482
-  };
-  var lnqingguia1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 192,
-  	y: 482
-  };
-  var lnqingguit1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 216,
-  	y: 482
-  };
-  var lva1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 240,
-  	y: 482
-  };
-  var nanchanga1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 264,
-  	y: 482
-  };
-  var nanchangt1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 288,
-  	y: 482
-  };
-  var nanjingdianche1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 312,
-  	y: 482
-  };
-  var nanninga1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 336,
-  	y: 482
-  };
-  var nanningt1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 360,
-  	y: 482
-  };
-  var qingdaoa1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 384,
-  	y: 482
-  };
-  var qingdaot1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 408,
-  	y: 482
-  };
-  var shenfa1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 432,
-  	y: 482
-  };
-  var shenzhen1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 456,
-  	y: 482
-  };
-  var shijiazhuanga1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 480,
-  	y: 482
-  };
-  var shijiazhuangt1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 502,
-  	y: 305
-  };
-  var tianjint1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 501,
-  	y: 426
-  };
-  var wulumuqit1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 501,
-  	y: 454
-  };
-  var wuhant1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 499,
-  	y: 204
-  };
-  var wulumuqia1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 500,
-  	y: 333
-  };
-  var xiament1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 479,
-  	y: 233
-  };
-  var xiamena1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 502,
-  	y: 362
-  };
-  var xuzhoua1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 486,
-  	y: 394
-  };
-  var xuzhout1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 497,
-  	y: 168
-  };
-  var zhongxin1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 24,
-  	x: 501,
-  	y: 265
-  };
-  var chengdut1 = {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 20,
-  	x: 498,
-  	y: 0
-  };
-  var wenzhout1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 22,
-  	x: 496,
-  	y: 56
-  };
-  var jiaohang1 = {
-  	pixelRatio: 2,
-  	width: 22,
-  	height: 22,
-  	x: 504,
-  	y: 482
-  };
-  var changshat1 = {
-  	pixelRatio: 2,
-  	width: 23,
-  	height: 20,
-  	x: 503,
-  	y: 233
-  };
-  var xianggangt1 = {
-  	pixelRatio: 2,
-  	width: 22,
-  	height: 20,
-  	x: 490,
-  	y: 112
-  };
-  var nanjingt1 = {
-  	pixelRatio: 2,
-  	width: 21,
-  	height: 20,
-  	x: 0,
-  	y: 506
-  };
-  var taibeit1 = {
-  	pixelRatio: 2,
-  	width: 21,
-  	height: 20,
-  	x: 21,
-  	y: 506
-  };
-  var huaiandianche1 = {
-  	pixelRatio: 2,
-  	width: 23,
-  	height: 18,
-  	x: 42,
-  	y: 506
-  };
-  var beijingt1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 65,
-  	y: 506
-  };
-  var beijingw1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 85,
-  	y: 506
-  };
-  var beijingy1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 105,
-  	y: 506
-  };
-  var changchunt1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 125,
-  	y: 506
-  };
-  var changzhouw = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 145,
-  	y: 506
-  };
-  var chongqingt1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 165,
-  	y: 506
-  };
-  var daliant1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 185,
-  	y: 506
-  };
-  var dongguanw1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 205,
-  	y: 506
-  };
-  var fuzhouw1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 225,
-  	y: 506
-  };
-  var guangzhout1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 245,
-  	y: 506
-  };
-  var guiyangw1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 265,
-  	y: 506
-  };
-  var haerbint1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 285,
-  	y: 506
-  };
-  var hangzhout1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 305,
-  	y: 506
-  };
-  var hefeiw1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 325,
-  	y: 506
-  };
-  var hongw1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 345,
-  	y: 506
-  };
-  var jinanw1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 365,
-  	y: 506
-  };
-  var kunmingt1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 385,
-  	y: 506
-  };
-  var lanw1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 405,
-  	y: 506
-  };
-  var lnqingguiw1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 425,
-  	y: 506
-  };
-  var lvw1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 445,
-  	y: 506
-  };
-  var minsheng1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 465,
-  	y: 506
-  };
-  var nanchangw1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 485,
-  	y: 506
-  };
-  var nanningw1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 505,
-  	y: 506
-  };
-  var ningbot1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 525,
-  	y: 506
-  };
-  var qingdaow1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 526,
-  	y: 482
-  };
-  var qitayinhang1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 526,
-  	y: 305
-  };
-  var shanghait1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 525,
-  	y: 426
-  };
-  var shenyangt1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 525,
-  	y: 454
-  };
-  var shenzhent1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 523,
-  	y: 204
-  };
-  var shijiazhuangw1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 524,
-  	y: 333
-  };
-  var wulumuqiw1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 526,
-  	y: 233
-  };
-  var wuxit1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 526,
-  	y: 362
-  };
-  var xiant1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 510,
-  	y: 394
-  };
-  var zhengzhout1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 521,
-  	y: 168
-  };
-  var xiamenw1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 525,
-  	y: 265
-  };
-  var xuzhouw1 = {
-  	pixelRatio: 2,
-  	width: 20,
-  	height: 20,
-  	x: 526,
-  	y: 0
-  };
-  var guangda1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 16,
-  	x: 520,
-  	y: 56
-  };
-  var pufa1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 16,
-  	x: 512,
-  	y: 112
-  };
-  var xingye1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 16,
-  	x: 0,
-  	y: 526
-  };
-  var suzhoudianche1 = {
-  	pixelRatio: 2,
-  	width: 24,
-  	height: 11,
-  	x: 24,
-  	y: 526
-  };
-  var arrowRight = {
-  	pixelRatio: 2,
-  	width: 23,
-  	height: 11,
-  	x: 48,
-  	y: 526
-  };
-  var arrowLeft = {
-  	pixelRatio: 2,
-  	width: 23,
-  	height: 7,
-  	x: 71,
-  	y: 526
-  };
-  var daodian1 = {
-  	pixelRatio: 2,
-  	width: 8,
-  	height: 8,
-  	x: 94,
-  	y: 526
-  };
-  var json = {
-  	"0": {
-  	width: 27,
-  	height: 42,
-  	x: 1,
-  	y: 44
-  },
-  	"1": {
-  	pixelRatio: 2,
-  	width: 28,
-  	height: 28,
-  	x: 369,
-  	y: 394
-  },
-  	dasha1: dasha1,
-  	dian1: dian1,
-  	dijishi1: dijishi1,
-  	gaoerfu1: gaoerfu1,
-  	gonganju1: gonganju1,
-  	gongmu1: gongmu1,
-  	gongjiaozhan1: gongjiaozhan1,
-  	guangzhou1: guangzhou1,
-  	haerbin1: haerbin1,
-  	guowaishoudu1: guowaishoudu1,
-  	hangzhou1: hangzhou1,
-  	hongb1: hongb1,
-  	jiansheyinhang1: jiansheyinhang1,
-  	jiayouzhan1: jiayouzhan1,
-  	jiuba1: jiuba1,
-  	jiudian1: jiudian1,
-  	kfc1: kfc1,
-  	ktv1: ktv1,
-  	kunming1: kunming1,
-  	kafeiting1: kafeiting1,
-  	lanb1: lanb1,
-  	lanc1: lanc1,
-  	lvb1: lvb1,
-  	lvc1: lvc1,
-  	lvguan1: lvguan1,
-  	ningbo1: ningbo1,
-  	nonghang1: nonghang1,
-  	qicheweixiu1: qicheweixiu1,
-  	quxian1: quxian1,
-  	shan1: shan1,
-  	shangchang1: shangchang1,
-  	shanghai1: shanghai1,
-  	shenghui1: shenghui1,
-  	shenyang1: shenyang1,
-  	simiao1: simiao1,
-  	tingchechang1: tingchechang1,
-  	wuxi1: wuxi1,
-  	xian1: xian1,
-  	xican1: xican1,
-  	xuexiao1: xuexiao1,
-  	yaodian1: yaodian1,
-  	yinyueting1: yinyueting1,
-  	yiyuan1: yiyuan1,
-  	zhengfujiguan1: zhengfujiguan1,
-  	zhengzhou1: zhengzhou1,
-  	youju1: youju1,
-  	youlechang1: youlechang1,
-  	zhaoshangyinhang1: zhaoshangyinhang1,
-  	zhongcan1: zhongcan1,
-  	zhongguoyinhang1: zhongguoyinhang1,
-  	zhuzhai1: zhuzhai1,
-  	suzhout1: suzhout1,
-  	aoment1: aoment1,
-  	fuzhout1: fuzhout1,
-  	jie2: jie2,
-  	changzhout1: changzhout1,
-  	gaoxiongt1: gaoxiongt1,
-  	jinant1: jinant1,
-  	beijinga1: beijinga1,
-  	changzhoua1: changzhoua1,
-  	dongguana1: dongguana1,
-  	dongguant1: dongguant1,
-  	fuzhoua1: fuzhoua1,
-  	gonghang1: gonghang1,
-  	gongyuan1: gongyuan1,
-  	guangfa1: guangfa1,
-  	guiyanga1: guiyanga1,
-  	guiyangt1: guiyangt1,
-  	hefeit1: hefeit1,
-  	hefeia1: hefeia1,
-  	honga1: honga1,
-  	huaxia1: huaxia1,
-  	jinana1: jinana1,
-  	lana1: lana1,
-  	lnqingguia1: lnqingguia1,
-  	lnqingguit1: lnqingguit1,
-  	lva1: lva1,
-  	nanchanga1: nanchanga1,
-  	nanchangt1: nanchangt1,
-  	nanjingdianche1: nanjingdianche1,
-  	nanninga1: nanninga1,
-  	nanningt1: nanningt1,
-  	qingdaoa1: qingdaoa1,
-  	qingdaot1: qingdaot1,
-  	shenfa1: shenfa1,
-  	shenzhen1: shenzhen1,
-  	shijiazhuanga1: shijiazhuanga1,
-  	shijiazhuangt1: shijiazhuangt1,
-  	tianjint1: tianjint1,
-  	wulumuqit1: wulumuqit1,
-  	wuhant1: wuhant1,
-  	wulumuqia1: wulumuqia1,
-  	xiament1: xiament1,
-  	xiamena1: xiamena1,
-  	xuzhoua1: xuzhoua1,
-  	xuzhout1: xuzhout1,
-  	zhongxin1: zhongxin1,
-  	chengdut1: chengdut1,
-  	wenzhout1: wenzhout1,
-  	jiaohang1: jiaohang1,
-  	changshat1: changshat1,
-  	xianggangt1: xianggangt1,
-  	nanjingt1: nanjingt1,
-  	taibeit1: taibeit1,
-  	huaiandianche1: huaiandianche1,
-  	beijingt1: beijingt1,
-  	beijingw1: beijingw1,
-  	beijingy1: beijingy1,
-  	changchunt1: changchunt1,
-  	changzhouw: changzhouw,
-  	chongqingt1: chongqingt1,
-  	daliant1: daliant1,
-  	dongguanw1: dongguanw1,
-  	fuzhouw1: fuzhouw1,
-  	guangzhout1: guangzhout1,
-  	guiyangw1: guiyangw1,
-  	haerbint1: haerbint1,
-  	hangzhout1: hangzhout1,
-  	hefeiw1: hefeiw1,
-  	hongw1: hongw1,
-  	jinanw1: jinanw1,
-  	kunmingt1: kunmingt1,
-  	lanw1: lanw1,
-  	lnqingguiw1: lnqingguiw1,
-  	lvw1: lvw1,
-  	minsheng1: minsheng1,
-  	nanchangw1: nanchangw1,
-  	nanningw1: nanningw1,
-  	ningbot1: ningbot1,
-  	qingdaow1: qingdaow1,
-  	qitayinhang1: qitayinhang1,
-  	shanghait1: shanghait1,
-  	shenyangt1: shenyangt1,
-  	shenzhent1: shenzhent1,
-  	shijiazhuangw1: shijiazhuangw1,
-  	wulumuqiw1: wulumuqiw1,
-  	wuxit1: wuxit1,
-  	xiant1: xiant1,
-  	zhengzhout1: zhengzhout1,
-  	xiamenw1: xiamenw1,
-  	xuzhouw1: xuzhouw1,
-  	guangda1: guangda1,
-  	pufa1: pufa1,
-  	xingye1: xingye1,
-  	suzhoudianche1: suzhoudianche1,
-  	arrowRight: arrowRight,
-  	arrowLeft: arrowLeft,
-  	daodian1: daodian1
-  };
+  var pointFrag = "precision mediump float;\n#define GLSLIFY 1\nuniform sampler2D texture;uniform bool fbo;uniform vec4 color;varying vec2 uv;void main(){if(fbo){gl_FragColor=color/255.0;}else{gl_FragColor=texture2D(texture,uv);}}"; // eslint-disable-line
 
-  var Shape = /** @class */ (function () {
-      function Shape(context, featureInfo) {
-          this._context = context;
-          var _a = featureInfo.id, id = _a === void 0 ? '0' : _a, _b = featureInfo.lngLats, lngLats = _b === void 0 ? [] : _b, _c = featureInfo.style, style = _c === void 0 ? {} : _c;
-          this._id = id === '0' ? generateUUID() : id;
-          this._lngLats = this.clone(lngLats);
-          this._pickColor = this._context.color.getColor(this._id);
-          this.style = style;
+  var lineVert = "#define GLSLIFY 1\nuniform mat3 model;uniform float thickness;uniform int miter;uniform float aspect;uniform float height;attribute vec2 prevPosition;attribute vec2 currPosition;attribute vec2 nextPosition;attribute float offsetScale;void main(){vec2 aspectVec=vec2(aspect,1.0);vec2 prevProject=(model*vec3(prevPosition,1.0)).xy;vec2 currProject=(model*vec3(currPosition,1.0)).xy;vec2 nextProject=(model*vec3(nextPosition,1.0)).xy;vec2 prevScreen=prevProject*aspectVec;vec2 currScreen=currProject*aspectVec;vec2 nextScreen=nextProject*aspectVec;float len=thickness;vec2 dir=vec2(0.0);if(currScreen==prevScreen){dir=normalize(nextScreen-currScreen);}else if(currScreen==nextScreen){dir=normalize(currScreen-prevScreen);}else{vec2 dirA=normalize((currScreen-prevScreen));if(miter==1){vec2 dirB=normalize((nextScreen-currScreen));float cosin=dot(dirA,dirB);if(cosin<-0.995){dir=dirB;}else{vec2 tangent=normalize(dirA+dirB);vec2 perp=vec2(-dirA.y,dirA.x);vec2 miter=vec2(-tangent.y,tangent.x);dir=tangent;len=thickness/dot(miter,perp);}}else{dir=dirA;}}vec2 normal=vec2(-dir.y,dir.x)*len;normal.y/=height;normal.x/=height*aspect/2.0;normal.x/=aspect;vec4 offset=vec4(normal*offsetScale,0.0,0.0);gl_Position=vec4(currProject,0.0,1.0)+offset;}"; // eslint-disable-line
+
+  var lineFrag = "precision mediump float;\n#define GLSLIFY 1\nuniform vec4 color;void main(){gl_FragColor=color/255.0;}"; // eslint-disable-line
+
+  var polygonVert = "#define GLSLIFY 1\nuniform mat3 model;attribute vec2 aPosition;void main(){vec3 position=model*vec3(aPosition,1.0);gl_Position=vec4(position.xy,0.0,1.0);}"; // eslint-disable-line
+
+  var polygonFrag = "precision mediump float;\n#define GLSLIFY 1\nuniform vec4 color;void main(){gl_FragColor=color/255.0;}"; // eslint-disable-line
+
+  var nodeVert = "#define GLSLIFY 1\nuniform mat3 model;uniform float size;attribute vec2 aPosition;void main(){vec3 position=model*vec3(aPosition,1.0);gl_Position=vec4(position.xy,0.0,1.0);gl_PointSize=size;}"; // eslint-disable-line
+
+  var nodeFrag = "precision mediump float;\n#define GLSLIFY 1\nuniform vec4 color;void main(){float dist=distance(gl_PointCoord,vec2(0.5,0.5));float smooth1=smoothstep(0.55,0.45,dist);float smooth2=smoothstep(0.45,0.4,dist);gl_FragColor=vec4(0,0,0,1)*smooth1*(1.0-smooth2)+color/255.0*smooth2;}"; // eslint-disable-line
+
+  var _a;
+  var FLOAT_BYTES = Float32Array.BYTES_PER_ELEMENT;
+  /**
+   * 创建标面绘制命令
+   */
+  function createPolygonDrawCommand(regl) {
+      var uniforms = {
+          model: regl.prop('modelMatrix'),
+          color: regl.prop('color') || [255, 0, 102, 127]
+      };
+      var attributes = {
+          aPosition: {
+              buffer: regl.prop('positionBuffer'),
+              offset: 0
+          }
+      };
+      // 标面预编译着色器程序
+      return regl({
+          vert: polygonVert,
+          frag: polygonFrag,
+          uniforms: uniforms,
+          attributes: attributes,
+          elements: regl.prop('elements')
+      });
+  }
+  /**
+   * 创建标线绘制命令
+   */
+  function createLineDrawCommand(regl) {
+      var uniforms = {
+          model: regl.prop('modelMatrix'),
+          color: regl.prop('color') || [255, 255, 255, 255],
+          thickness: regl.prop('width') || 3,
+          miter: 1,
+          aspect: function (_a) {
+              var viewportWidth = _a.viewportWidth, viewportHeight = _a.viewportHeight;
+              return viewportWidth / viewportHeight;
+          },
+          height: function (_a) {
+              var viewportHeight = _a.viewportHeight, pixelRatio = _a.pixelRatio;
+              return viewportHeight / pixelRatio;
+          }
+      };
+      var attributes = {
+          prevPosition: {
+              buffer: regl.prop('positionBuffer'),
+              offset: 0
+          },
+          currPosition: {
+              buffer: regl.prop('positionBuffer'),
+              offset: FLOAT_BYTES * 2 * 2
+          },
+          nextPosition: {
+              buffer: regl.prop('positionBuffer'),
+              offset: FLOAT_BYTES * 2 * 4
+          },
+          offsetScale: regl.prop('offsetBuffer')
+      };
+      // 预编译着色器程序
+      return regl({
+          vert: lineVert,
+          frag: lineFrag,
+          uniforms: uniforms,
+          attributes: attributes,
+          elements: regl.prop('elements')
+      });
+  }
+  /**
+       * 创建标点绘制命令
+       */
+  function createPointDrawCommand(regl) {
+      var uniforms = {
+          model: regl.prop('modelMatrix'),
+          texture: regl.prop('texture'),
+          color: regl.prop('color'),
+          fbo: regl.prop('fbo')
+      };
+      var attributes = {
+          aPosition: {
+              buffer: regl.prop('positionBuffer')
+          },
+          aTexCoord: {
+              buffer: regl.prop('texCoordBuffer')
+          }
+      };
+      // 标点预编译着色器程序
+      return regl({
+          vert: pointVert,
+          frag: pointFrag,
+          uniforms: uniforms,
+          attributes: attributes,
+          elements: regl.prop('elements')
+      });
+  }
+  function creatNodeDrawCommand(regl) {
+      var uniforms = {
+          model: regl.prop('modelMatrix'),
+          color: regl.prop('color'),
+          size: regl.prop('size')
+      };
+      var attributes = {
+          aPosition: {
+              buffer: regl.prop('positionBuffer'),
+              offset: 0
+          }
+      };
+      // 标面预编译着色器程序
+      return regl({
+          vert: nodeVert,
+          frag: nodeFrag,
+          uniforms: uniforms,
+          attributes: attributes,
+          primitive: 'points',
+          count: 1
+      });
+  }
+  var commands = (_a = {},
+      _a[FeatureType.POLYGON] = createPolygonDrawCommand,
+      _a[FeatureType.BORDER] = createLineDrawCommand,
+      _a[FeatureType.LINE] = createLineDrawCommand,
+      _a[FeatureType.POINT] = createPointDrawCommand,
+      _a[FeatureType.NODE] = creatNodeDrawCommand,
+      _a);
+  function createDrawCall(regl) {
+      var drawCalls = {};
+      for (var command in commands) {
+          drawCalls[command] = commands[command](regl);
       }
-      Shape.prototype._initEvent = function () {
-          // 等待拾取
-          this._context.on('pick-start', this._pickStart, this);
+      return drawCalls;
+  }
+
+  var Shape = /** @class */ (function (_super) {
+      __extends(Shape, _super);
+      function Shape(editor, featureInfo, defaultInfo) {
+          var _this = _super.call(this) || this;
+          _this.editor = editor;
+          _this.initFeatureInfo(featureInfo, defaultInfo);
+          return _this;
+      }
+      /**
+       * 初始化要素信息
+       * @param featureInfo
+       * @param defaultInfo
+       */
+      Shape.prototype.initFeatureInfo = function (featureInfo, defaultInfo) {
+          if (featureInfo === void 0) { featureInfo = {}; }
+          if (defaultInfo === void 0) { defaultInfo = {}; }
+          var _a = deepMerge(defaultInfo, featureInfo, []), id = _a.id, style = _a.style, lngLats = _a.lngLats;
+          this.id = id === '0' ? generateUUID() : id;
+          this.lngLats = deepCopy(lngLats);
+          this.style = deepCopy(style);
       };
       /**
-       * 拾取
-       * @param pickInfo 拾取所需要的信息, 鼠标所在位置坐标和帧缓冲区
+       * 初始化绘制图形所需要的顶点和索引数据
        */
-      Shape.prototype._pickStart = function (pickInfo) {
-          if (this._lngLats.length === 0) {
-              return;
-          }
-          var uuid = pickInfo.uuid, type = pickInfo.type;
-          // uuid与当前要素id相同，说明拾取到当前要素了
-          if (uuid === this._id) {
-              this._context.fire("picked:" + type, {
-                  type: type,
-                  feature: this
-              });
-          }
-      };
-      Shape.prototype.getId = function () {
-          return this._id;
-      };
+      Shape.prototype.initDraw = function () { };
+      /**
+       * 参与标绘的要素，子类必须要实现该方法
+       */
+      Shape.prototype.waiting = function (register) { };
+      /**
+       * 重新根据经纬度计算屏幕坐标，重绘图形
+       */
+      Shape.prototype.repaint = function () { };
+      /**
+       * 经纬度转屏幕像素坐标
+       * @param lngLats
+       */
       Shape.prototype.project = function (lngLats) {
           var _this = this;
           var isArray = true;
@@ -10778,255 +9730,53 @@
               lngLats = [lngLats];
               isArray = false;
           }
-          var points = lngLats.map(function (geo) {
-              return _this._context._shapeConfig.lngLatsToPoints(geo);
+          var pixes = lngLats.map(function (geo) {
+              return _this.editor.lngLatToPix(geo);
           });
           if (!isArray) {
-              return points.length === 0 ? null : points[0];
+              return pixes.length === 0 ? null : pixes[0];
           }
-          return points;
+          return pixes;
       };
-      Shape.prototype.clone = function (lngLats) {
-          if (!Array.isArray(lngLats)) {
-              lngLats = [lngLats];
-          }
-          return lngLats.map(function (lngLat) {
-              return __assign({}, lngLat);
-          });
-      };
-      Shape.prototype.add = function () {
-      };
-      Shape.prototype["delete"] = function () {
-      };
-      Shape.prototype.update = function () {
-      };
-      /**
-       * 坐标克隆返回，防止上层应用修改该值
-       */
-      Shape.prototype.getLngLats = function () {
-          return this.clone(this._lngLats);
-      };
-      Shape.prototype.setLngLats = function (lngLats) {
-          if (!Array.isArray(lngLats)) {
-              lngLats = [lngLats];
-          }
-          this._lngLats = this.clone(lngLats);
-          this.repaint();
-      };
-      Shape.prototype.setStyle = function (style, isRepaint) {
-          if (isRepaint === void 0) { isRepaint = true; }
-          this.style = __assign(__assign({}, this.style), style);
-          isRepaint && this._context.fire('repaint');
-      };
-      Shape.prototype.setId = function (id) {
-          // 目前只针对新标绘的要素进行id重设
-          if (this._id.indexOf('id_') === -1) {
-              return;
-          }
-          var oldId = this._id;
-          var ids = this._id.split('_');
-          var suffix = '_';
-          if (ids.length > 2) {
-              suffix = suffix + ids.slice(2).join('_');
-          }
-          else {
-              suffix = '';
-          }
-          this._id = "" + id + suffix;
-          // 改变颜色与id的对应关系
-          this._context.color.changeUuid(oldId, this._id);
-      };
-      /**
-       * 移除该要素
-       */
       Shape.prototype.destroy = function () {
-          this._lngLats = [];
-          this._context.off('pick-start', this._pickStart, this);
-          this._context.fire('repaint');
       };
       return Shape;
-  }());
+  }(Evented));
 
+  /**
+   * 线要素的默认信息
+   */
   var DEFAULT_INFO = {
       id: '0',
       lngLats: [],
       style: {
-          code: 0,
-          color: [0, 0, 0, 0]
-      }
-  };
-  var imgWidth = 512, imgHeight = 128;
-  var Point = /** @class */ (function (_super) {
-      __extends(Point, _super);
-      function Point(context, info) {
-          if (info === void 0) { info = DEFAULT_INFO; }
-          var _this = _super.call(this, context, info) || this;
-          _this.featureType = 'point';
-          // 初始化绘制配置
-          _this._initDraw();
-          // 初始化事件监听
-          _this._initEvent();
-          return _this;
-      }
-      Point.prototype._initDraw = function () {
-          var _this = this;
-          var _regl = this._context._regl;
-          base64ToUint8Array(img$4, function (data) {
-              _this.texture = _regl.texture({
-                  width: imgWidth,
-                  height: imgHeight,
-                  data: data
-              });
-          });
-          this.positionBuffer = _regl.buffer({
-              usage: 'dynamic',
-              type: 'float'
-          });
-          this.texCoordBuffer = _regl.buffer({
-              usage: 'dynamic',
-              type: 'float'
-          });
-          this.elements = _regl.elements({
-              primitive: 'triangles',
-              usage: 'dynamic',
-              type: 'uint16',
-              count: 0,
-              length: 0
-          });
-      };
-      Point.prototype.waiting = function (register) {
-          var _this = this;
-          // 地图点击事件
-          var mapClick = function (lngLat, finish) {
-              // 进入编辑模式
-              _this._context.enter(Modes.EDITING);
-              _this._lngLats = [lngLat];
-              finish();
-              _this._context.fire('repaint');
-              _this._context.fire('draw-finish', _this);
-          };
-          // 鼠标在地图上移动事件
-          var mapMove = function (lngLat) {
-          };
-          register(mapClick, mapMove);
-      };
-      Point.prototype.repaint = function () {
-          if (this._lngLats.length < 1) {
-              return;
-          }
-          // 经纬度转屏幕像素坐标
-          var points = this.project(this._lngLats);
-          var _a = this.style.code, code = _a === void 0 ? '0' : _a;
-          var _b = json[code], width = _b.width, height = _b.height, texCoordX = _b.x, texCoordY = _b.y;
-          var ratio = window.devicePixelRatio;
-          var halfWidth = width / 2;
-          // 顶点位置平铺成一维的
-          var positions = [];
-          var point = points[0];
-          // 推算出四角点坐标，使得经纬度位置正好处于图标的正中下方
-          for (var p = 0; p < 4; p++) {
-              var cornerX = point[0] + ((-1) * Math.pow(-1, p % 2)) * (halfWidth / ratio);
-              var cornerY = point[1] + (Math.floor(p / 2) - 1) * (height / ratio);
-              positions.push(cornerX, cornerY);
-          }
-          // 更新缓冲区
-          // 顶点更新
-          this.positionBuffer(positions);
-          // 纹理坐标更新
-          var texCoords = [];
-          for (var t = 0; t < 4; t++) {
-              var x = texCoordX + width * (t % 2);
-              var y = texCoordY + height * Math.floor(t / 2);
-              texCoords.push(x / imgWidth, y / imgHeight);
-          }
-          this.texCoordBuffer(texCoords);
-          // 索引更新
-          var indices = [0, 1, 2, 2, 1, 3];
-          this.elements(indices);
-      };
-      Point.prototype.select = function () {
-      };
-      Point.prototype.unselect = function () {
-      };
-      return Point;
-  }(Shape));
-
-  var Node = /** @class */ (function (_super) {
-      __extends(Node, _super);
-      function Node(context, info) {
-          var _this = _super.call(this, context, info) || this;
-          // 依附的要素ID集合
-          _this.attachIds = [];
-          _this.featureType = 'node';
-          _this.attachIds.push(info.attachId);
-          // 初始化绘制配置
-          _this._initDraw();
-          // 初始化事件监听
-          _this._initEvent();
-          return _this;
-      }
-      Node.prototype._initDraw = function () {
-          this.positionBuffer = this._context._regl.buffer({
-              usage: 'dynamic',
-              type: 'float'
-          });
-      };
-      Node.prototype.waiting = function () { };
-      Node.prototype.repaint = function () {
-          if (this._lngLats.length < 1) {
-              return;
-          }
-          // 经纬度转屏幕像素坐标
-          var points = this.project(this._lngLats);
-          // 顶点位置平铺成一维的
-          var positions = [];
-          for (var p = 0; p < points.length; p++) {
-              var point = points[p];
-              positions.push.apply(positions, point);
-          }
-          // 更新缓冲区
-          // 顶点更新
-          this.positionBuffer(positions);
-      };
-      Node.prototype.unselect = function () {
-      };
-      Node.prototype.select = function () {
-      };
-      return Node;
-  }(Shape));
-
-  var DEFAULT_INFO$1 = {
-      id: '0',
-      lngLats: [],
-      style: {
           width: 3,
-          color: [255, 255, 255, 255]
+          color: [255, 0, 0, 255]
       }
   };
   var Line = /** @class */ (function (_super) {
       __extends(Line, _super);
-      function Line(context, info) {
-          if (info === void 0) { info = DEFAULT_INFO$1; }
-          var _this = _super.call(this, context, info) || this;
-          _this.nodes = [];
-          _this.featureType = 'line';
-          // 初始化绘制配置
-          _this._initDraw();
-          // 初始化事件监听
-          _this._initEvent();
+      function Line(editor, featureInfo) {
+          var _this = _super.call(this, editor, featureInfo, DEFAULT_INFO) || this;
+          _this.featureType = FeatureType.LINE;
+          // 初始化绘制线需要的buffer和element
+          _this.initDraw();
           return _this;
       }
-      Line.prototype._initDraw = function () {
-          var _regl = this._context._regl;
-          this.positionBuffer = _regl.buffer({
+      /**
+       * 初始化绘制图形所需要的顶点缓存
+       */
+      Line.prototype.initDraw = function () {
+          var regl = this.editor.regl;
+          this.positionBuffer = regl.buffer({
               usage: 'dynamic',
               type: 'float'
           });
-          this.offsetBuffer = _regl.buffer({
+          this.offsetBuffer = regl.buffer({
               usage: 'dynamic',
               type: 'float'
           });
-          this.elements = _regl.elements({
+          this.elements = regl.elements({
               primitive: 'triangles',
               usage: 'dynamic',
               type: 'uint16',
@@ -11035,108 +9785,81 @@
           });
       };
       /**
-       * 标线处于等待标绘的状态
-       * @param register 注册鼠标点击和移动
+       * 等待标绘
+       * @param register 注册点击和鼠标移动函数
        */
       Line.prototype.waiting = function (register) {
           var _this = this;
+          var lngLats = this.lngLats;
+          var bufferPixes = this.editor.bufferPixes;
           // 地图点击事件
-          var mapClick = function (lngLat, finish) {
-              // 进入编辑模式
-              _this._context.enter(Modes.EDITING);
-              var len = _this._lngLats.length;
-              if (len > 1) {
-                  var lastLngLat = _this._lngLats[len - 2];
-                  var lastPoint = _this.project(lastLngLat);
+          var mapClick = function (lngLat, drawFinish) {
+              var len = lngLats.length;
+              // 首次绘制，需要为线添加两个点：起始点，移动点
+              if (len < 1) {
+                  lngLats.push(lngLat);
+                  // 设置当前模式为正在标绘模式
+                  _this.editor.context.enter(Modes.EDITING);
+              }
+              else {
+                  // 当前鼠标点击的位置
                   var currentPoint = _this.project(lngLat);
-                  var xDis = Math.abs(lastPoint[0] - currentPoint[0]);
-                  var yDis = Math.abs(lastPoint[1] - currentPoint[1]);
-                  // 最后一个点点击的位置相同即完成绘制
-                  // 之后需要添加缓冲区，只要点击到缓冲区内，就代表绘制结束
-                  if (xDis <= _this._context.pixDis && yDis <= _this._context.pixDis) {
-                      // 移除最后一个移动点
-                      _this._lngLats.splice(len - 1, 1);
-                      _this.nodes.splice(len - 1, 1);
-                      _this.nodes[_this.nodes.length - 1].style.size = 18;
-                      // 完成绘制的回调函数
-                      finish();
-                      _this._context.fire('draw-finish', _this);
+                  // 上一次最后绘制的点位置
+                  var lastLngLat = lngLats[len - 2];
+                  var lastPoint = _this.project(lastLngLat);
+                  // 计算两者的坐标差
+                  var xDis = Math.abs(lastPoint.x - currentPoint.x);
+                  var yDis = Math.abs(lastPoint.y - currentPoint.y);
+                  // 最后一个点点击的位置在缓冲区内即完成绘制
+                  if (xDis <= bufferPixes && yDis <= bufferPixes) {
+                      // 将移动点移除
+                      lngLats.splice(len - 1, 1);
+                      // 完成绘制的回调函数，该函数会注销鼠标点击事件和鼠标移动事件
+                      drawFinish();
+                      // 完成绘制的要素会加入到编辑器的要素集中
+                      _this.editor.drawFinish(_this);
                       return;
                   }
                   else {
-                      _this._lngLats[len - 1] = lngLat;
-                      _this.nodes[len - 1].setLngLats(lngLat);
+                      lngLats[len - 1] = lngLat;
                   }
               }
-              else {
-                  // 首次绘制，需要为线添加两个点
-                  _this._lngLats.push(lngLat);
-                  // 节点
-                  var lastIndex_1 = _this._lngLats.length - 1;
-                  _this.createNode(lngLat, lastIndex_1);
-              }
               // 添加移动点
-              _this._lngLats.push(lngLat);
-              // 节点
-              var lastIndex = _this._lngLats.length - 1;
-              _this.createNode(lngLat, lastIndex);
+              lngLats.push(lngLat);
+              // 重绘
+              _this.editor.repaint();
           };
           // 鼠标在地图上移动事件
           var mapMove = function (lngLat) {
-              var len = _this._lngLats.length;
+              var len = lngLats.length;
+              // 还未开始绘制
               if (len === 0) {
                   return;
               }
-              _this._lngLats[len - 1] = lngLat;
-              _this.nodes[len - 1].setLngLats(lngLat);
+              lngLats[len - 1] = lngLat;
+              // 重绘
+              _this.editor.repaint();
           };
           // 注册监听函数
           register(mapClick, mapMove);
       };
-      Line.prototype.createNode = function (lngLat, index) {
-          // 节点
-          var node = new Node(this._context, {
-              id: this._id + "_node_" + index,
-              attachId: this._id,
-              lngLats: [lngLat],
-              style: {
-                  color: [255, 255, 255, 255],
-                  size: 14.0
-              }
-          });
-          this.nodes.push(node);
-          return node;
-      };
-      Line.prototype.nodeRestyle = function () {
-          var lastIndex = this.nodes.length - 1;
-          // 重新计算node的size
-          this.nodes.forEach(function (node, index) {
-              var size = 14.0;
-              if (index === 0 || index === lastIndex) {
-                  size = 18.0;
-              }
-              node.setStyle({
-                  size: size
-              }, false);
-          });
-      };
+      /**
+       * 线重绘，重绘会将坐标重新计算
+       */
       Line.prototype.repaint = function () {
-          if (this._lngLats.length < 2) {
+          var lngLats = this.lngLats;
+          // 坐标不存在或只有一个点（线只有两个点，并且这两个点重复）
+          if (lngLats.length <= 1) {
               return;
           }
-          else if (this._lngLats.length === 2) {
-              if (this._lngLats[0] === this._lngLats[1]) {
-                  return;
-              }
-          }
           // 经纬度转屏幕像素坐标
-          var points = this.project(this._lngLats);
-          var len = points.length;
+          var pixes = this.project(lngLats);
+          var len = pixes.length;
           // 顶点位置平铺成一维的
           var positions = [];
-          for (var p = 0; p < points.length; p++) {
-              var point = points[p];
-              positions.push.apply(positions, point);
+          for (var p = 0; p < len; p++) {
+              var pix = pixes[p];
+              positions.push(pix.x, pix.y);
           }
           // 以 1，2，3三个顶点为例
           // 复制最后一个顶点，放到最后面：1，2，3，3
@@ -11156,1484 +9879,244 @@
           this.offsetBuffer(offsetDup);
           // 索引更新
           this.elements(indices);
-          // 重新设置每个节点的样式
-          this.nodeRestyle();
-      };
-      /**
-       * 点击的是空白区域, 只保留首尾节点
-       */
-      Line.prototype.unselect = function () {
-          if (this.nodes.length < 2) {
-              return;
-          }
-          var first = this.nodes[0];
-          var last = this.nodes[this.nodes.length - 1];
-          first.setId(this._id + "_node_0");
-          last.setId(this._id + "_node_1");
-          this.nodes = [first, last];
-          // 重绘
-          this._context.fire('repaint');
-      };
-      /**
-       * 要素被选中
-       */
-      Line.prototype.select = function () {
-          var _this = this;
-          this.nodes = [];
-          this._lngLats.forEach(function (lngLat, index) {
-              var node = _this.createNode(lngLat, index);
-              if (index === 0 || index === _this._lngLats.length - 1) {
-                  node.setStyle({
-                      size: 18
-                  }, false);
-              }
-          });
-          // 重绘
-          this._context.fire('repaint');
       };
       return Line;
   }(Shape));
 
-  var earcut_1 = earcut;
-  var _default = earcut;
-
-  function earcut(data, holeIndices, dim) {
-
-      dim = dim || 2;
-
-      var hasHoles = holeIndices && holeIndices.length,
-          outerLen = hasHoles ? holeIndices[0] * dim : data.length,
-          outerNode = linkedList(data, 0, outerLen, dim, true),
-          triangles = [];
-
-      if (!outerNode || outerNode.next === outerNode.prev) return triangles;
-
-      var minX, minY, maxX, maxY, x, y, invSize;
-
-      if (hasHoles) outerNode = eliminateHoles(data, holeIndices, outerNode, dim);
-
-      // if the shape is not too simple, we'll use z-order curve hash later; calculate polygon bbox
-      if (data.length > 80 * dim) {
-          minX = maxX = data[0];
-          minY = maxY = data[1];
-
-          for (var i = dim; i < outerLen; i += dim) {
-              x = data[i];
-              y = data[i + 1];
-              if (x < minX) minX = x;
-              if (y < minY) minY = y;
-              if (x > maxX) maxX = x;
-              if (y > maxY) maxY = y;
-          }
-
-          // minX, minY and invSize are later used to transform coords into integers for z-order calculation
-          invSize = Math.max(maxX - minX, maxY - minY);
-          invSize = invSize !== 0 ? 1 / invSize : 0;
+  var Node = /** @class */ (function (_super) {
+      __extends(Node, _super);
+      function Node() {
+          return _super !== null && _super.apply(this, arguments) || this;
       }
+      return Node;
+  }(Shape));
 
-      earcutLinked(outerNode, triangles, dim, minX, minY, invSize);
-
-      return triangles;
-  }
-
-  // create a circular doubly linked list from polygon points in the specified winding order
-  function linkedList(data, start, end, dim, clockwise) {
-      var i, last;
-
-      if (clockwise === (signedArea(data, start, end, dim) > 0)) {
-          for (i = start; i < end; i += dim) last = insertNode(i, data[i], data[i + 1], last);
-      } else {
-          for (i = end - dim; i >= start; i -= dim) last = insertNode(i, data[i], data[i + 1], last);
+  var Point = /** @class */ (function (_super) {
+      __extends(Point, _super);
+      function Point() {
+          return _super !== null && _super.apply(this, arguments) || this;
       }
+      return Point;
+  }(Shape));
 
-      if (last && equals(last, last.next)) {
-          removeNode(last);
-          last = last.next;
-      }
-
-      return last;
-  }
-
-  // eliminate colinear or duplicate points
-  function filterPoints(start, end) {
-      if (!start) return start;
-      if (!end) end = start;
-
-      var p = start,
-          again;
-      do {
-          again = false;
-
-          if (!p.steiner && (equals(p, p.next) || area(p.prev, p, p.next) === 0)) {
-              removeNode(p);
-              p = end = p.prev;
-              if (p === p.next) break;
-              again = true;
-
-          } else {
-              p = p.next;
-          }
-      } while (again || p !== end);
-
-      return end;
-  }
-
-  // main ear slicing loop which triangulates a polygon (given as a linked list)
-  function earcutLinked(ear, triangles, dim, minX, minY, invSize, pass) {
-      if (!ear) return;
-
-      // interlink polygon nodes in z-order
-      if (!pass && invSize) indexCurve(ear, minX, minY, invSize);
-
-      var stop = ear,
-          prev, next;
-
-      // iterate through ears, slicing them one by one
-      while (ear.prev !== ear.next) {
-          prev = ear.prev;
-          next = ear.next;
-
-          if (invSize ? isEarHashed(ear, minX, minY, invSize) : isEar(ear)) {
-              // cut off the triangle
-              triangles.push(prev.i / dim);
-              triangles.push(ear.i / dim);
-              triangles.push(next.i / dim);
-
-              removeNode(ear);
-
-              // skipping the next vertex leads to less sliver triangles
-              ear = next.next;
-              stop = next.next;
-
-              continue;
-          }
-
-          ear = next;
-
-          // if we looped through the whole remaining polygon and can't find any more ears
-          if (ear === stop) {
-              // try filtering points and slicing again
-              if (!pass) {
-                  earcutLinked(filterPoints(ear), triangles, dim, minX, minY, invSize, 1);
-
-              // if this didn't work, try curing all small self-intersections locally
-              } else if (pass === 1) {
-                  ear = cureLocalIntersections(filterPoints(ear), triangles, dim);
-                  earcutLinked(ear, triangles, dim, minX, minY, invSize, 2);
-
-              // as a last resort, try splitting the remaining polygon into two
-              } else if (pass === 2) {
-                  splitEarcut(ear, triangles, dim, minX, minY, invSize);
-              }
-
-              break;
-          }
-      }
-  }
-
-  // check whether a polygon node forms a valid ear with adjacent nodes
-  function isEar(ear) {
-      var a = ear.prev,
-          b = ear,
-          c = ear.next;
-
-      if (area(a, b, c) >= 0) return false; // reflex, can't be an ear
-
-      // now make sure we don't have other points inside the potential ear
-      var p = ear.next.next;
-
-      while (p !== ear.prev) {
-          if (pointInTriangle(a.x, a.y, b.x, b.y, c.x, c.y, p.x, p.y) &&
-              area(p.prev, p, p.next) >= 0) return false;
-          p = p.next;
-      }
-
-      return true;
-  }
-
-  function isEarHashed(ear, minX, minY, invSize) {
-      var a = ear.prev,
-          b = ear,
-          c = ear.next;
-
-      if (area(a, b, c) >= 0) return false; // reflex, can't be an ear
-
-      // triangle bbox; min & max are calculated like this for speed
-      var minTX = a.x < b.x ? (a.x < c.x ? a.x : c.x) : (b.x < c.x ? b.x : c.x),
-          minTY = a.y < b.y ? (a.y < c.y ? a.y : c.y) : (b.y < c.y ? b.y : c.y),
-          maxTX = a.x > b.x ? (a.x > c.x ? a.x : c.x) : (b.x > c.x ? b.x : c.x),
-          maxTY = a.y > b.y ? (a.y > c.y ? a.y : c.y) : (b.y > c.y ? b.y : c.y);
-
-      // z-order range for the current triangle bbox;
-      var minZ = zOrder(minTX, minTY, minX, minY, invSize),
-          maxZ = zOrder(maxTX, maxTY, minX, minY, invSize);
-
-      var p = ear.prevZ,
-          n = ear.nextZ;
-
-      // look for points inside the triangle in both directions
-      while (p && p.z >= minZ && n && n.z <= maxZ) {
-          if (p !== ear.prev && p !== ear.next &&
-              pointInTriangle(a.x, a.y, b.x, b.y, c.x, c.y, p.x, p.y) &&
-              area(p.prev, p, p.next) >= 0) return false;
-          p = p.prevZ;
-
-          if (n !== ear.prev && n !== ear.next &&
-              pointInTriangle(a.x, a.y, b.x, b.y, c.x, c.y, n.x, n.y) &&
-              area(n.prev, n, n.next) >= 0) return false;
-          n = n.nextZ;
-      }
-
-      // look for remaining points in decreasing z-order
-      while (p && p.z >= minZ) {
-          if (p !== ear.prev && p !== ear.next &&
-              pointInTriangle(a.x, a.y, b.x, b.y, c.x, c.y, p.x, p.y) &&
-              area(p.prev, p, p.next) >= 0) return false;
-          p = p.prevZ;
-      }
-
-      // look for remaining points in increasing z-order
-      while (n && n.z <= maxZ) {
-          if (n !== ear.prev && n !== ear.next &&
-              pointInTriangle(a.x, a.y, b.x, b.y, c.x, c.y, n.x, n.y) &&
-              area(n.prev, n, n.next) >= 0) return false;
-          n = n.nextZ;
-      }
-
-      return true;
-  }
-
-  // go through all polygon nodes and cure small local self-intersections
-  function cureLocalIntersections(start, triangles, dim) {
-      var p = start;
-      do {
-          var a = p.prev,
-              b = p.next.next;
-
-          if (!equals(a, b) && intersects(a, p, p.next, b) && locallyInside(a, b) && locallyInside(b, a)) {
-
-              triangles.push(a.i / dim);
-              triangles.push(p.i / dim);
-              triangles.push(b.i / dim);
-
-              // remove two nodes involved
-              removeNode(p);
-              removeNode(p.next);
-
-              p = start = b;
-          }
-          p = p.next;
-      } while (p !== start);
-
-      return filterPoints(p);
-  }
-
-  // try splitting polygon into two and triangulate them independently
-  function splitEarcut(start, triangles, dim, minX, minY, invSize) {
-      // look for a valid diagonal that divides the polygon into two
-      var a = start;
-      do {
-          var b = a.next.next;
-          while (b !== a.prev) {
-              if (a.i !== b.i && isValidDiagonal(a, b)) {
-                  // split the polygon in two by the diagonal
-                  var c = splitPolygon(a, b);
-
-                  // filter colinear points around the cuts
-                  a = filterPoints(a, a.next);
-                  c = filterPoints(c, c.next);
-
-                  // run earcut on each half
-                  earcutLinked(a, triangles, dim, minX, minY, invSize);
-                  earcutLinked(c, triangles, dim, minX, minY, invSize);
-                  return;
-              }
-              b = b.next;
-          }
-          a = a.next;
-      } while (a !== start);
-  }
-
-  // link every hole into the outer loop, producing a single-ring polygon without holes
-  function eliminateHoles(data, holeIndices, outerNode, dim) {
-      var queue = [],
-          i, len, start, end, list;
-
-      for (i = 0, len = holeIndices.length; i < len; i++) {
-          start = holeIndices[i] * dim;
-          end = i < len - 1 ? holeIndices[i + 1] * dim : data.length;
-          list = linkedList(data, start, end, dim, false);
-          if (list === list.next) list.steiner = true;
-          queue.push(getLeftmost(list));
-      }
-
-      queue.sort(compareX);
-
-      // process holes from left to right
-      for (i = 0; i < queue.length; i++) {
-          eliminateHole(queue[i], outerNode);
-          outerNode = filterPoints(outerNode, outerNode.next);
-      }
-
-      return outerNode;
-  }
-
-  function compareX(a, b) {
-      return a.x - b.x;
-  }
-
-  // find a bridge between vertices that connects hole with an outer ring and and link it
-  function eliminateHole(hole, outerNode) {
-      outerNode = findHoleBridge(hole, outerNode);
-      if (outerNode) {
-          var b = splitPolygon(outerNode, hole);
-
-          // filter collinear points around the cuts
-          filterPoints(outerNode, outerNode.next);
-          filterPoints(b, b.next);
-      }
-  }
-
-  // David Eberly's algorithm for finding a bridge between hole and outer polygon
-  function findHoleBridge(hole, outerNode) {
-      var p = outerNode,
-          hx = hole.x,
-          hy = hole.y,
-          qx = -Infinity,
-          m;
-
-      // find a segment intersected by a ray from the hole's leftmost point to the left;
-      // segment's endpoint with lesser x will be potential connection point
-      do {
-          if (hy <= p.y && hy >= p.next.y && p.next.y !== p.y) {
-              var x = p.x + (hy - p.y) * (p.next.x - p.x) / (p.next.y - p.y);
-              if (x <= hx && x > qx) {
-                  qx = x;
-                  if (x === hx) {
-                      if (hy === p.y) return p;
-                      if (hy === p.next.y) return p.next;
-                  }
-                  m = p.x < p.next.x ? p : p.next;
-              }
-          }
-          p = p.next;
-      } while (p !== outerNode);
-
-      if (!m) return null;
-
-      if (hx === qx) return m; // hole touches outer segment; pick leftmost endpoint
-
-      // look for points inside the triangle of hole point, segment intersection and endpoint;
-      // if there are no points found, we have a valid connection;
-      // otherwise choose the point of the minimum angle with the ray as connection point
-
-      var stop = m,
-          mx = m.x,
-          my = m.y,
-          tanMin = Infinity,
-          tan;
-
-      p = m;
-
-      do {
-          if (hx >= p.x && p.x >= mx && hx !== p.x &&
-                  pointInTriangle(hy < my ? hx : qx, hy, mx, my, hy < my ? qx : hx, hy, p.x, p.y)) {
-
-              tan = Math.abs(hy - p.y) / (hx - p.x); // tangential
-
-              if (locallyInside(p, hole) &&
-                  (tan < tanMin || (tan === tanMin && (p.x > m.x || (p.x === m.x && sectorContainsSector(m, p)))))) {
-                  m = p;
-                  tanMin = tan;
-              }
-          }
-
-          p = p.next;
-      } while (p !== stop);
-
-      return m;
-  }
-
-  // whether sector in vertex m contains sector in vertex p in the same coordinates
-  function sectorContainsSector(m, p) {
-      return area(m.prev, m, p.prev) < 0 && area(p.next, m, m.next) < 0;
-  }
-
-  // interlink polygon nodes in z-order
-  function indexCurve(start, minX, minY, invSize) {
-      var p = start;
-      do {
-          if (p.z === null) p.z = zOrder(p.x, p.y, minX, minY, invSize);
-          p.prevZ = p.prev;
-          p.nextZ = p.next;
-          p = p.next;
-      } while (p !== start);
-
-      p.prevZ.nextZ = null;
-      p.prevZ = null;
-
-      sortLinked(p);
-  }
-
-  // Simon Tatham's linked list merge sort algorithm
-  // http://www.chiark.greenend.org.uk/~sgtatham/algorithms/listsort.html
-  function sortLinked(list) {
-      var i, p, q, e, tail, numMerges, pSize, qSize,
-          inSize = 1;
-
-      do {
-          p = list;
-          list = null;
-          tail = null;
-          numMerges = 0;
-
-          while (p) {
-              numMerges++;
-              q = p;
-              pSize = 0;
-              for (i = 0; i < inSize; i++) {
-                  pSize++;
-                  q = q.nextZ;
-                  if (!q) break;
-              }
-              qSize = inSize;
-
-              while (pSize > 0 || (qSize > 0 && q)) {
-
-                  if (pSize !== 0 && (qSize === 0 || !q || p.z <= q.z)) {
-                      e = p;
-                      p = p.nextZ;
-                      pSize--;
-                  } else {
-                      e = q;
-                      q = q.nextZ;
-                      qSize--;
-                  }
-
-                  if (tail) tail.nextZ = e;
-                  else list = e;
-
-                  e.prevZ = tail;
-                  tail = e;
-              }
-
-              p = q;
-          }
-
-          tail.nextZ = null;
-          inSize *= 2;
-
-      } while (numMerges > 1);
-
-      return list;
-  }
-
-  // z-order of a point given coords and inverse of the longer side of data bbox
-  function zOrder(x, y, minX, minY, invSize) {
-      // coords are transformed into non-negative 15-bit integer range
-      x = 32767 * (x - minX) * invSize;
-      y = 32767 * (y - minY) * invSize;
-
-      x = (x | (x << 8)) & 0x00FF00FF;
-      x = (x | (x << 4)) & 0x0F0F0F0F;
-      x = (x | (x << 2)) & 0x33333333;
-      x = (x | (x << 1)) & 0x55555555;
-
-      y = (y | (y << 8)) & 0x00FF00FF;
-      y = (y | (y << 4)) & 0x0F0F0F0F;
-      y = (y | (y << 2)) & 0x33333333;
-      y = (y | (y << 1)) & 0x55555555;
-
-      return x | (y << 1);
-  }
-
-  // find the leftmost node of a polygon ring
-  function getLeftmost(start) {
-      var p = start,
-          leftmost = start;
-      do {
-          if (p.x < leftmost.x || (p.x === leftmost.x && p.y < leftmost.y)) leftmost = p;
-          p = p.next;
-      } while (p !== start);
-
-      return leftmost;
-  }
-
-  // check if a point lies within a convex triangle
-  function pointInTriangle(ax, ay, bx, by, cx, cy, px, py) {
-      return (cx - px) * (ay - py) - (ax - px) * (cy - py) >= 0 &&
-             (ax - px) * (by - py) - (bx - px) * (ay - py) >= 0 &&
-             (bx - px) * (cy - py) - (cx - px) * (by - py) >= 0;
-  }
-
-  // check if a diagonal between two polygon nodes is valid (lies in polygon interior)
-  function isValidDiagonal(a, b) {
-      return a.next.i !== b.i && a.prev.i !== b.i && !intersectsPolygon(a, b) && // dones't intersect other edges
-             (locallyInside(a, b) && locallyInside(b, a) && middleInside(a, b) && // locally visible
-              (area(a.prev, a, b.prev) || area(a, b.prev, b)) || // does not create opposite-facing sectors
-              equals(a, b) && area(a.prev, a, a.next) > 0 && area(b.prev, b, b.next) > 0); // special zero-length case
-  }
-
-  // signed area of a triangle
-  function area(p, q, r) {
-      return (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
-  }
-
-  // check if two points are equal
-  function equals(p1, p2) {
-      return p1.x === p2.x && p1.y === p2.y;
-  }
-
-  // check if two segments intersect
-  function intersects(p1, q1, p2, q2) {
-      var o1 = sign(area(p1, q1, p2));
-      var o2 = sign(area(p1, q1, q2));
-      var o3 = sign(area(p2, q2, p1));
-      var o4 = sign(area(p2, q2, q1));
-
-      if (o1 !== o2 && o3 !== o4) return true; // general case
-
-      if (o1 === 0 && onSegment(p1, p2, q1)) return true; // p1, q1 and p2 are collinear and p2 lies on p1q1
-      if (o2 === 0 && onSegment(p1, q2, q1)) return true; // p1, q1 and q2 are collinear and q2 lies on p1q1
-      if (o3 === 0 && onSegment(p2, p1, q2)) return true; // p2, q2 and p1 are collinear and p1 lies on p2q2
-      if (o4 === 0 && onSegment(p2, q1, q2)) return true; // p2, q2 and q1 are collinear and q1 lies on p2q2
-
-      return false;
-  }
-
-  // for collinear points p, q, r, check if point q lies on segment pr
-  function onSegment(p, q, r) {
-      return q.x <= Math.max(p.x, r.x) && q.x >= Math.min(p.x, r.x) && q.y <= Math.max(p.y, r.y) && q.y >= Math.min(p.y, r.y);
-  }
-
-  function sign(num) {
-      return num > 0 ? 1 : num < 0 ? -1 : 0;
-  }
-
-  // check if a polygon diagonal intersects any polygon segments
-  function intersectsPolygon(a, b) {
-      var p = a;
-      do {
-          if (p.i !== a.i && p.next.i !== a.i && p.i !== b.i && p.next.i !== b.i &&
-                  intersects(p, p.next, a, b)) return true;
-          p = p.next;
-      } while (p !== a);
-
-      return false;
-  }
-
-  // check if a polygon diagonal is locally inside the polygon
-  function locallyInside(a, b) {
-      return area(a.prev, a, a.next) < 0 ?
-          area(a, b, a.next) >= 0 && area(a, a.prev, b) >= 0 :
-          area(a, b, a.prev) < 0 || area(a, a.next, b) < 0;
-  }
-
-  // check if the middle point of a polygon diagonal is inside the polygon
-  function middleInside(a, b) {
-      var p = a,
-          inside = false,
-          px = (a.x + b.x) / 2,
-          py = (a.y + b.y) / 2;
-      do {
-          if (((p.y > py) !== (p.next.y > py)) && p.next.y !== p.y &&
-                  (px < (p.next.x - p.x) * (py - p.y) / (p.next.y - p.y) + p.x))
-              inside = !inside;
-          p = p.next;
-      } while (p !== a);
-
-      return inside;
-  }
-
-  // link two polygon vertices with a bridge; if the vertices belong to the same ring, it splits polygon into two;
-  // if one belongs to the outer ring and another to a hole, it merges it into a single ring
-  function splitPolygon(a, b) {
-      var a2 = new Node$1(a.i, a.x, a.y),
-          b2 = new Node$1(b.i, b.x, b.y),
-          an = a.next,
-          bp = b.prev;
-
-      a.next = b;
-      b.prev = a;
-
-      a2.next = an;
-      an.prev = a2;
-
-      b2.next = a2;
-      a2.prev = b2;
-
-      bp.next = b2;
-      b2.prev = bp;
-
-      return b2;
-  }
-
-  // create a node and optionally link it with previous one (in a circular doubly linked list)
-  function insertNode(i, x, y, last) {
-      var p = new Node$1(i, x, y);
-
-      if (!last) {
-          p.prev = p;
-          p.next = p;
-
-      } else {
-          p.next = last.next;
-          p.prev = last;
-          last.next.prev = p;
-          last.next = p;
-      }
-      return p;
-  }
-
-  function removeNode(p) {
-      p.next.prev = p.prev;
-      p.prev.next = p.next;
-
-      if (p.prevZ) p.prevZ.nextZ = p.nextZ;
-      if (p.nextZ) p.nextZ.prevZ = p.prevZ;
-  }
-
-  function Node$1(i, x, y) {
-      // vertex index in coordinates array
-      this.i = i;
-
-      // vertex coordinates
-      this.x = x;
-      this.y = y;
-
-      // previous and next vertex nodes in a polygon ring
-      this.prev = null;
-      this.next = null;
-
-      // z-order curve value
-      this.z = null;
-
-      // previous and next nodes in z-order
-      this.prevZ = null;
-      this.nextZ = null;
-
-      // indicates whether this is a steiner point
-      this.steiner = false;
-  }
-
-  // return a percentage difference between the polygon area and its triangulation area;
-  // used to verify correctness of triangulation
-  earcut.deviation = function (data, holeIndices, dim, triangles) {
-      var hasHoles = holeIndices && holeIndices.length;
-      var outerLen = hasHoles ? holeIndices[0] * dim : data.length;
-
-      var polygonArea = Math.abs(signedArea(data, 0, outerLen, dim));
-      if (hasHoles) {
-          for (var i = 0, len = holeIndices.length; i < len; i++) {
-              var start = holeIndices[i] * dim;
-              var end = i < len - 1 ? holeIndices[i + 1] * dim : data.length;
-              polygonArea -= Math.abs(signedArea(data, start, end, dim));
-          }
-      }
-
-      var trianglesArea = 0;
-      for (i = 0; i < triangles.length; i += 3) {
-          var a = triangles[i] * dim;
-          var b = triangles[i + 1] * dim;
-          var c = triangles[i + 2] * dim;
-          trianglesArea += Math.abs(
-              (data[a] - data[c]) * (data[b + 1] - data[a + 1]) -
-              (data[a] - data[b]) * (data[c + 1] - data[a + 1]));
-      }
-
-      return polygonArea === 0 && trianglesArea === 0 ? 0 :
-          Math.abs((trianglesArea - polygonArea) / polygonArea);
-  };
-
-  function signedArea(data, start, end, dim) {
-      var sum = 0;
-      for (var i = start, j = end - dim; i < end; i += dim) {
-          sum += (data[j] - data[i]) * (data[i + 1] + data[j + 1]);
-          j = i;
-      }
-      return sum;
-  }
-
-  // turn a polygon in a multi-dimensional array form (e.g. as in GeoJSON) into a form Earcut accepts
-  earcut.flatten = function (data) {
-      var dim = data[0][0].length,
-          result = {vertices: [], holes: [], dimensions: dim},
-          holeIndex = 0;
-
-      for (var i = 0; i < data.length; i++) {
-          for (var j = 0; j < data[i].length; j++) {
-              for (var d = 0; d < dim; d++) result.vertices.push(data[i][j][d]);
-          }
-          if (i > 0) {
-              holeIndex += data[i - 1].length;
-              result.holes.push(holeIndex);
-          }
-      }
-      return result;
-  };
-  earcut_1.default = _default;
-
-  var DEFAULT_INFO$2 = { id: '0', lngLats: [], style: { color: [255, 0, 0, 120] } };
   var Polygon = /** @class */ (function (_super) {
       __extends(Polygon, _super);
-      /**
-       *
-       * @param context
-       * @param info  { id: '0', lngLats: [], style: { color: [255, 0, 0, 120] }}
-       */
-      function Polygon(context, info) {
-          if (info === void 0) { info = DEFAULT_INFO$2; }
-          var _this = _super.call(this, context, info) || this;
-          _this.nodes = [];
-          _this.featureType = 'polygon';
-          var lineId = _this._id + "_border";
-          _this._line = new Line(context, { id: lineId, lngLats: _this._lngLats, style: { width: 2, color: _this.style.color } });
-          // 初始化事件监听
-          _this._initEvent();
-          // 初始化绘制配置
-          _this._initDraw();
-          return _this;
+      function Polygon() {
+          return _super !== null && _super.apply(this, arguments) || this;
       }
-      Polygon.prototype._initDraw = function () {
-          var _regl = this._context._regl;
-          this.positionBuffer = _regl.buffer({
-              usage: 'dynamic',
-              type: 'float'
-          });
-          this.elements = _regl.elements({
-              primitive: 'triangles',
-              usage: 'dynamic',
-              type: 'uint16',
-              count: 0,
-              length: 0
-          });
-      };
-      /**
-       * 标线处于等待标绘的状态
-       * @param register 注册鼠标点击和移动
-       */
-      Polygon.prototype.waiting = function (register) {
-          var _this = this;
-          // 地图点击事件
-          var mapClick = function (lngLat, finish) {
-              // 进入编辑模式
-              _this._context.enter(Modes.EDITING);
-              var len = _this._lngLats.length;
-              if (len > 1) {
-                  // 最后一个点
-                  var lastLngLat = _this._lngLats[len - 3];
-                  // 最后一个点点击的位置相同即完成绘制
-                  // 之后需要添加缓冲区，只要点击到缓冲区内，就代表绘制结束
-                  var lastPoint = _this.project(lastLngLat);
-                  var currentPoint = _this.project(lngLat);
-                  var xDis = Math.abs(lastPoint[0] - currentPoint[0]);
-                  var yDis = Math.abs(lastPoint[1] - currentPoint[1]);
-                  if (xDis <= _this._context.pixDis && yDis <= _this._context.pixDis) {
-                      // 移除移动点
-                      _this._lngLats.splice(len - 2, 1);
-                      // 更新边框坐标
-                      _this._line.setLngLats(_this._lngLats);
-                      // 完成绘制的回调函数
-                      finish();
-                      // 通知外层接口
-                      _this._context.fire('draw-finish', _this);
-                      return;
-                  }
-              }
-              else {
-                  // 首次绘制，需要为面添加三个点
-                  // 移动点
-                  _this._lngLats.push(lngLat);
-                  // 末尾点
-                  _this._lngLats.push(lngLat);
-              }
-              len = _this._lngLats.length;
-              // 本次需要插入的点
-              _this._lngLats.splice(len - 2, 0, lngLat);
-              _this._line.setLngLats(_this._lngLats);
-          };
-          // 鼠标在地图上移动事件
-          var mapMove = function (lngLat) {
-              var len = _this._lngLats.length;
-              if (len === 0) {
-                  return;
-              }
-              _this._lngLats[len - 2] = lngLat;
-              _this._line.setLngLats(_this._lngLats);
-          };
-          // 注册监听函数
-          register(mapClick, mapMove);
-      };
-      Polygon.prototype.repaint = function () {
-          if (this._lngLats.length < 2) {
-              return;
-          }
-          else if (this._lngLats.length === 3) {
-              // 三点重合
-              if (this._lngLats[0] === this._lngLats[1]
-                  && this._lngLats[1] === this._lngLats[2]) {
-                  return;
-              }
-          }
-          // 经纬度转屏幕像素坐标
-          var points = this.project(this._lngLats);
-          // 顶点位置平铺成一维的
-          var positions = [];
-          for (var p = 0; p < points.length; p++) {
-              var point = points[p];
-              positions.push.apply(positions, point);
-          }
-          var indices = earcut_1(positions);
-          if (indices.length === 0) {
-              indices = [0, 1, 2];
-          }
-          // 更新缓冲区
-          // 顶点更新
-          this.positionBuffer(positions);
-          // 索引更新
-          this.elements(indices);
-      };
-      Polygon.prototype.unselect = function () {
-      };
-      Polygon.prototype.select = function () {
-      };
       return Polygon;
   }(Shape));
 
-  var pointVert = "#define GLSLIFY 1\nuniform mat3 model;attribute vec2 aPosition;attribute vec2 aTexCoord;varying vec2 uv;void main(){vec3 position=model*vec3(aPosition,1.0);gl_Position=vec4(position.xy,0.0,1.0);uv=aTexCoord;}"; // eslint-disable-line
-
-  var pointFrag = "precision mediump float;\n#define GLSLIFY 1\nuniform sampler2D texture;uniform bool fbo;uniform vec4 color;varying vec2 uv;void main(){if(fbo){gl_FragColor=color/255.0;}else{gl_FragColor=texture2D(texture,uv);}}"; // eslint-disable-line
-
-  var lineVert = "#define GLSLIFY 1\nuniform mat3 model;uniform float thickness;uniform int miter;uniform float aspect;uniform float height;attribute vec2 prevPosition;attribute vec2 currPosition;attribute vec2 nextPosition;attribute float offsetScale;void main(){vec2 aspectVec=vec2(aspect,1.0);vec2 prevProject=(model*vec3(prevPosition,1.0)).xy;vec2 currProject=(model*vec3(currPosition,1.0)).xy;vec2 nextProject=(model*vec3(nextPosition,1.0)).xy;vec2 prevScreen=prevProject*aspectVec;vec2 currScreen=currProject*aspectVec;vec2 nextScreen=nextProject*aspectVec;float len=thickness;vec2 dir=vec2(0.0);if(currScreen==prevScreen){dir=normalize(nextScreen-currScreen);}else if(currScreen==nextScreen){dir=normalize(currScreen-prevScreen);}else{vec2 dirA=normalize((currScreen-prevScreen));if(miter==1){vec2 dirB=normalize((nextScreen-currScreen));float cosin=dot(dirA,dirB);if(cosin<-0.995){dir=dirB;}else{vec2 tangent=normalize(dirA+dirB);vec2 perp=vec2(-dirA.y,dirA.x);vec2 miter=vec2(-tangent.y,tangent.x);dir=tangent;len=thickness/dot(miter,perp);}}else{dir=dirA;}}vec2 normal=vec2(-dir.y,dir.x)*len;normal.y/=height;normal.x/=height*aspect/2.0;normal.x/=aspect;vec4 offset=vec4(normal*offsetScale,0.0,0.0);gl_Position=vec4(currProject,0.0,1.0)+offset;}"; // eslint-disable-line
-
-  var lineFrag = "precision mediump float;\n#define GLSLIFY 1\nuniform vec4 color;void main(){gl_FragColor=color/255.0;}"; // eslint-disable-line
-
-  var polygonVert = "#define GLSLIFY 1\nuniform mat3 model;attribute vec2 aPosition;void main(){vec3 position=model*vec3(aPosition,1.0);gl_Position=vec4(position.xy,0.0,1.0);}"; // eslint-disable-line
-
-  var polygonFrag = "precision mediump float;\n#define GLSLIFY 1\nuniform vec4 color;void main(){gl_FragColor=color/255.0;}"; // eslint-disable-line
-
-  var nodeVert = "#define GLSLIFY 1\nuniform mat3 model;uniform float size;attribute vec2 aPosition;void main(){vec3 position=model*vec3(aPosition,1.0);gl_Position=vec4(position.xy,0.0,1.0);gl_PointSize=size;}"; // eslint-disable-line
-
-  var nodeFrag = "precision mediump float;\n#define GLSLIFY 1\nuniform vec4 color;void main(){float dist=distance(gl_PointCoord,vec2(0.5,0.5));float smooth1=smoothstep(0.55,0.45,dist);float smooth2=smoothstep(0.45,0.4,dist);gl_FragColor=vec4(0,0,0,1)*smooth1*(1.0-smooth2)+color/255.0*smooth2;}"; // eslint-disable-line
-
-  var _a;
+  var _a$1;
   // 要素类型对应的要素类
-  var featureClasses = (_a = {},
-      _a[FeatureType.POLYGON] = Polygon,
-      _a[FeatureType.BORDER] = Line,
-      _a[FeatureType.LINE] = Line,
-      _a[FeatureType.NODE] = Node,
-      _a[FeatureType.POINT] = Point,
-      _a);
-  var FLOAT_BYTES = Float32Array.BYTES_PER_ELEMENT;
-  var Editor = /** @class */ (function () {
-      function Editor(gl, shapeConfig) {
+  var featureClasses = (_a$1 = {},
+      _a$1[FeatureType.POLYGON] = Polygon,
+      _a$1[FeatureType.BORDER] = Line,
+      _a$1[FeatureType.LINE] = Line,
+      _a$1[FeatureType.NODE] = Node,
+      _a$1[FeatureType.POINT] = Point,
+      _a$1);
+  var Editor = /** @class */ (function (_super) {
+      __extends(Editor, _super);
+      function Editor(gl, config) {
           var _a;
-          this._features = {};
-          this._featureProps = {};
-          this._fboFeatureProps = {};
-          this._drawCommand = (_a = {},
-              _a[FeatureType.POLYGON] = null,
-              _a[FeatureType.BORDER] = null,
-              _a[FeatureType.LINE] = null,
-              _a[FeatureType.NODE] = null,
-              _a[FeatureType.POINT] = null,
-              _a);
+          var _this = _super.call(this) || this;
+          // 正在绘制的要素
+          _this.drawingFeature = null;
           // 当前被选中的要素
-          this._pickedFeature = null;
-          // 重绘
-          this._tick = null;
-          // 拾取定时器，防止频繁拾取
-          this._pickTick = null;
-          this._context = new Context({
-              gl: gl,
-              shapeConfig: shapeConfig
-          });
-          // 初始化变量
-          this._init();
-          // 事件监听初始化
-          this._initializeEvent();
-          // 预编译图形绘制命令
-          this._initializeDrawCommand();
+          _this.selectedFeature = null;
+          // 绘制完成的缓存半径
+          _this.bufferPixes = 3;
+          // 要素集合
+          _this.features = (_a = {},
+              _a[FeatureType.POLYGON] = [],
+              _a[FeatureType.LINE] = [],
+              _a[FeatureType.POINT] = [],
+              _a);
+          // 是否需要重新设置webgl的viewport，解决改变地图容器的大小，引起坐标偏移的问题
+          _this.isRefresh = false;
+          // 生成环境上下文，主要处理一些全局上的
+          _this.context = new Context({ gl: gl });
+          // regl 实例，处理图形渲染
+          _this.regl = regl_unchecked(gl);
+          // editor 将代理config中的方法和属性
+          _this.config = config;
+          // 创建绘制点线面的渲染器
+          _this.drawCalls = createDrawCall(_this.regl);
+          return _this;
       }
       /**
-       * 初始化变量
-       */
-      Editor.prototype._init = function () {
-          var _this = this;
-          Object.values(FeatureType).forEach(function (featureType) {
-              _this._features[featureType] = [];
-              _this._featureProps[featureType] = [];
-              _this._fboFeatureProps[featureType] = [];
-          });
-          this._newFeature = null;
-      };
-      /**
-       * 事件监听
-       */
-      Editor.prototype._initializeEvent = function () {
-          var _this = this;
-          // 窗口变化，重置viewport
-          window.addEventListener('resize', function () {
-              _this._isPoll = true;
-          });
-          // 重绘
-          this._context.on('repaint', this.repaint, this);
-          // 绘制完成
-          this._context.on('draw-finish', this._drawFinish, this);
-          this._context.on('picked:click', this._pickedClick, this);
-          // 悬浮拾取到元素
-          this._context.on('picked:mousemove', this._pickedHover, this);
-          // 未拾取到元素
-          this._context.on('picked:mouseout', this._pickedOut, this);
-          // 点击的是画布空白区域
-          this._context.on('picked:clickout', this._pickedClickout, this);
-          // 画布点击事件
-          this._context._gl.canvas.addEventListener('click', this.pickEvent.bind(this));
-          // 悬浮高亮拾取
-          this._context._gl.canvas.addEventListener('mousemove', function (event) {
-              if (_this._pickTick) {
-                  clearTimeout(_this._pickTick);
-              }
-              _this._pickTick = setTimeout(function () {
-                  _this.pickEvent(event);
-                  _this._pickTick = null;
-              }, 30);
-          });
-      };
-      /**
-       * 拾取事件
-       * @param event 点击拾取|悬浮拾取
-       */
-      Editor.prototype.pickEvent = function (event) {
-          var _this = this;
-          var evt = event;
-          var clientX = evt.clientX, clientY = evt.clientY, type = evt.type;
-          var _a = this._context, _gl = _a._gl, _regl = _a._regl, mapStatus = _a.mapStatus, mode = _a.mode;
-          // 等待，编辑状态，不允许点击拾取
-          if ((mode === Modes.WATING || mode === Modes.EDITING) && type === 'click') {
-              return;
-          }
-          // 底图移动，不触发点击拾取动作
-          if (mapStatus === 'movestart' && type === 'click') {
-              this._context.setMapStatus('');
-              return;
-          }
-          // 设备像素比
-          var dpr = window.devicePixelRatio;
-          var target = evt.target;
-          var rect = target.getBoundingClientRect();
-          var x = dpr * (clientX - rect.left);
-          var y = _gl.drawingBufferHeight - dpr * (clientY - rect.top);
-          // 创建帧缓冲区
-          var fbo = _regl.framebuffer({
-              width: _regl._gl.drawingBufferWidth,
-              height: _regl._gl.drawingBufferHeight,
-              depth: false,
-              stencil: false,
-              depthStencil: false
-          });
-          // 使用帧缓冲区
-          _regl({ framebuffer: fbo })(function () {
-              // 重绘图形到fbo
-              _this.repaint({ fbo: true, drawing: false });
-              // 拾取鼠标点击位置的颜色
-              var rgba = _regl.read({
-                  x: x,
-                  y: y,
-                  width: 1,
-                  height: 1
-              });
-              // 销毁帧缓冲区
-              fbo.destroy();
-              // 颜色分量组成的key
-              var colorKey = rgba.join('-');
-              // 颜色key对应的uuid
-              var uuid = _this._context.color.getUUID(colorKey);
-              // 拾取到要素了
-              if (uuid) {
-                  // 去查找拾取到哪个要素了
-                  _this._context.fire('pick-start', { uuid: uuid, type: type });
-              }
-              else {
-                  if (type === 'mousemove') {
-                      _this._context.fire('picked:mouseout');
-                  }
-                  else if (type === 'click') {
-                      _this._context.fire('picked:clickout');
-                  }
-              }
-          });
-      };
-      /**
-       * 要素悬浮事件
-       * @param param0
-       */
-      Editor.prototype._pickedHover = function (_a) {
-          var feature = _a.feature;
-          this._context.hover(feature.featureType, true);
-      };
-      /**
-       * 要素离开事件
-       */
-      Editor.prototype._pickedOut = function () {
-          this._context.out();
-      };
-      /**
-       * 点击要素，拾取
-       */
-      Editor.prototype._pickedClick = function (_a) {
-          var feature = _a.feature;
-          // 取消上一个被选中的要素
-          this._pickedClickout();
-          var featureTypeUpper = feature.featureType.toUpperCase();
-          this._context.enter(Modes[featureTypeUpper + "_SELECT"]);
-          this._pickedFeature = feature;
-          // 要素被选中
-          this._pickedFeature.select();
-      };
-      /**
-       * 点击画布空白区域
-       */
-      Editor.prototype._pickedClickout = function () {
-          if (~this._context.mode.indexOf('_select') === 0
-              && this._context.mode !== Modes.IDLE) {
-              return;
-          }
-          if (this._pickedFeature) {
-              this._pickedFeature.unselect();
-              this._pickedFeature = null;
-          }
-      };
-      /**
-       * 初始化绘制命令
-       */
-      Editor.prototype._initializeDrawCommand = function () {
-          // 创建标面绘制命令
-          this.createPolygonDrawCommand();
-          // 创建标线绘制命令
-          this.createLineDrawCommand();
-          // 创建节点
-          this.creatNodeDrawCommand();
-          // 创建标点绘制命令
-          this.createPointDrawCommand();
-      };
-      /**
-       * 创建标点绘制命令
-       */
-      Editor.prototype.createPointDrawCommand = function () {
-          var _regl = this._context._regl;
-          var uniforms = {
-              model: _regl.prop('modelMatrix'),
-              texture: _regl.prop('texture'),
-              color: _regl.prop('color'),
-              fbo: _regl.prop('fbo')
-          };
-          var attributes = {
-              aPosition: {
-                  buffer: _regl.prop('positionBuffer')
-              },
-              aTexCoord: {
-                  buffer: _regl.prop('texCoordBuffer')
-              }
-          };
-          // 标点预编译着色器程序
-          this._drawCommand[FeatureType.POINT] = _regl({
-              vert: pointVert,
-              frag: pointFrag,
-              uniforms: uniforms,
-              attributes: attributes,
-              elements: _regl.prop('elements')
-          });
-      };
-      /**
-       * 创建标线绘制命令
-       */
-      Editor.prototype.createLineDrawCommand = function () {
-          var _regl = this._context._regl;
-          var uniforms = {
-              model: _regl.prop('modelMatrix'),
-              color: _regl.prop('color') || [255, 255, 255, 255],
-              thickness: _regl.prop('width') || 3,
-              miter: 1,
-              aspect: function (_a) {
-                  var viewportWidth = _a.viewportWidth, viewportHeight = _a.viewportHeight;
-                  return viewportWidth / viewportHeight;
-              },
-              height: function (_a) {
-                  var viewportHeight = _a.viewportHeight, pixelRatio = _a.pixelRatio;
-                  return viewportHeight / pixelRatio;
-              }
-          };
-          var attributes = {
-              prevPosition: {
-                  buffer: _regl.prop('positionBuffer'),
-                  offset: 0
-              },
-              currPosition: {
-                  buffer: _regl.prop('positionBuffer'),
-                  offset: FLOAT_BYTES * 2 * 2
-              },
-              nextPosition: {
-                  buffer: _regl.prop('positionBuffer'),
-                  offset: FLOAT_BYTES * 2 * 4
-              },
-              offsetScale: _regl.prop('offsetBuffer')
-          };
-          // 预编译着色器程序
-          this._drawCommand[FeatureType.LINE] = _regl({
-              vert: lineVert,
-              frag: lineFrag,
-              uniforms: uniforms,
-              attributes: attributes,
-              elements: _regl.prop('elements')
-          });
-          this._drawCommand[FeatureType.BORDER] = _regl({
-              vert: lineVert,
-              frag: lineFrag,
-              uniforms: uniforms,
-              attributes: attributes,
-              elements: _regl.prop('elements')
-          });
-      };
-      /**
-       * 创建标面绘制命令
-       */
-      Editor.prototype.createPolygonDrawCommand = function () {
-          var _regl = this._context._regl;
-          var uniforms = {
-              model: _regl.prop('modelMatrix'),
-              color: _regl.prop('color') || [255, 0, 102, 127]
-          };
-          var attributes = {
-              aPosition: {
-                  buffer: _regl.prop('positionBuffer'),
-                  offset: 0
-              }
-          };
-          // 标面预编译着色器程序
-          this._drawCommand[FeatureType.POLYGON] = _regl({
-              vert: polygonVert,
-              frag: polygonFrag,
-              uniforms: uniforms,
-              attributes: attributes,
-              elements: _regl.prop('elements')
-          });
-      };
-      Editor.prototype.creatNodeDrawCommand = function () {
-          var _regl = this._context._regl;
-          var uniforms = {
-              model: _regl.prop('modelMatrix'),
-              color: _regl.prop('color'),
-              size: _regl.prop('size')
-          };
-          var attributes = {
-              aPosition: {
-                  buffer: _regl.prop('positionBuffer'),
-                  offset: 0
-              }
-          };
-          // 标面预编译着色器程序
-          this._drawCommand[FeatureType.NODE] = _regl({
-              vert: nodeVert,
-              frag: nodeFrag,
-              uniforms: uniforms,
-              attributes: attributes,
-              primitive: 'points',
-              count: 1
-          });
-      };
-      /**
-       * 渲染要素信息
-       * @param geos
-       * @param retain 是否保留新标绘的要素
-       */
-      Editor.prototype.render = function (geos, retain) {
-          var _this = this;
-          if (geos === void 0) { geos = {}; }
-          if (retain === void 0) { retain = true; }
-          // 重绘当前视野的元素
-          var featureTypes = [FeatureType.POLYGON, FeatureType.LINE, FeatureType.POINT];
-          // 刷新当前视野元素的时候，新标绘的要素不删除
-          if (retain) {
-              featureTypes.forEach(function (featureType) {
-                  var retainFeatures = _this._features[featureType];
-                  _this._features[featureType] = [];
-                  for (var _i = 0, retainFeatures_1 = retainFeatures; _i < retainFeatures_1.length; _i++) {
-                      var feature = retainFeatures_1[_i];
-                      if (feature._id.startsWith('id_')) {
-                          _this._features[featureType].push(feature);
-                      }
-                  }
-              });
-          }
-          // 接受新的要素
-          featureTypes.forEach(function (featureType) {
-              var features = geos[featureType] || [];
-              var featuresMap = features.map(function (featureInfo) {
-                  var feature = new featureClasses[featureType](_this._context, featureInfo);
-                  return feature;
-              });
-              _this._features[featureType] = _this._features[featureType].concat(featuresMap);
-          });
-          // 重绘
-          this.repaint();
-      };
-      /**
-       * 启动编辑
+       * 点击标绘按钮，进入等待标绘模式
        * @param featureType 要素类型
+       * @param register 注册鼠标点击和移动事件
        */
-      Editor.prototype.start = function (featureType, fn) {
-          var _this = this;
-          // 已选中的元素要取消选中
-          this._pickedClickout();
+      Editor.prototype.start = function (featureType, register) {
           // 进入等待编辑模式
-          this._context.enter(Modes.WATING);
+          this.context.enter(Modes.WATING);
           // 先销毁上一次未完成绘制的要素
-          if (this._newFeature) {
-              this._newFeature.destroy();
+          if (this.drawingFeature) {
+              this.drawingFeature.destroy();
           }
           // 创建新的要素
-          this._newFeature = new featureClasses[featureType](this._context, undefined);
+          this.drawingFeature = new featureClasses[featureType](this);
           // 要素进入待编辑模式
-          this._newFeature.waiting(fn);
-          if (featureType !== FeatureType.POINT) {
-              this._tick = this._context._regl.frame(function () {
-                  _this.drawing();
-              });
-          }
+          this.drawingFeature.waiting(register);
       };
       /**
        * 绘制完成
        */
-      Editor.prototype._drawFinish = function (feature) {
-          // 退出编辑模式， 进入要素选中模式
-          this._context.enter(Modes[feature.featureType.toUpperCase() + "_SELECT"]);
-          if (!this._newFeature) {
+      Editor.prototype.drawFinish = function (feature) {
+          // 退出编辑模式，进入要素选中模式
+          this.context.enter(Modes[feature.featureType.toUpperCase() + "_SELECT"]);
+          if (!this.drawingFeature) {
               return;
           }
           // 新标绘的要素加入到要素集合中
-          this._addFeature(this._newFeature);
+          this.addFeature(this.drawingFeature);
           // 新标绘的要素成为被选中的要素
-          this._pickedFeature = this._newFeature;
-          this._context.fire('finish', this._newFeature);
-          this._clearTick();
-          this._newFeature = null;
+          this.selectedFeature = this.drawingFeature;
+          this.drawingFeature = null;
+          // 重绘
           this.repaint();
       };
-      Editor.prototype.drawBatch = function (featureType, featureProps, fbo) {
+      /**
+       * 画布重绘
+       */
+      Editor.prototype.repaint = function () {
           var _this = this;
-          // 批量绘制，帧缓冲区中的绘制不需要透明度，不然造成拾取颜色不准确
-          if (fbo) {
-              this._drawCommand[featureType](featureProps);
+          var regl = this.regl;
+          if (!regl) {
+              return;
           }
-          else {
-              var blendEnable = featureType !== FeatureType.LINE;
-              this._context._regl({
-                  blend: {
-                      enable: blendEnable,
-                      func: {
-                          src: 'src alpha',
-                          dst: 'one minus src alpha'
-                      }
-                  },
-                  depth: {
-                      mask: false
-                  }
-              })(function () {
-                  // 需要使用α混合，添加透明度
-                  _this._drawCommand[featureType](featureProps);
+          this.refresh();
+          // 渲染已有要素，按照面、线、点的顺序绘制
+          var featureTypes = [FeatureType.POLYGON, FeatureType.LINE, FeatureType.POINT];
+          featureTypes.forEach(function (featureType) {
+              if (featureType !== FeatureType.LINE) {
+                  return;
+              }
+              var features = _this.features[featureType];
+              var featureProps = features.map(function (feature) {
+                  return _this.featureMap(feature);
               });
+              _this.drawBatch(featureType, featureProps);
+          });
+          // 渲染正在绘制的要素
+          if (this.drawingFeature) {
+              var featureProps = this.featureMap(this.drawingFeature);
+              var featureType = this.drawingFeature.featureType;
+              this.drawBatch(featureType, featureProps);
           }
       };
       /**
-       * 数据更新，引起图形重新渲染
+       * 获取要素的属性信息
+       * @param feature
        */
-      Editor.prototype.repaint = function (param) {
-          var _this = this;
-          if (param === void 0) { param = { fbo: false, drawing: false }; }
-          var _regl = this._context._regl;
-          if (!_regl) {
-              return;
-          }
-          // 窗口尺寸变化，需要重新设置webgl的viewport
-          if (this._isPoll) {
-              _regl.poll();
-              this._isPoll = false;
-          }
-          // 重置颜色缓冲区和深度缓存区
-          _regl.clear({
-              color: [0, 0, 0, 0],
-              depth: 1
-          });
-          // 是否在帧缓冲区中绘制标识
-          var fbo = param.fbo, drawing = param.drawing;
-          var _featureProps = fbo ? this._fboFeatureProps : this._featureProps;
-          var nodeProps = _featureProps[FeatureType.NODE];
-          var borderProps = _featureProps[FeatureType.BORDER];
-          if (!drawing) {
-              nodeProps = [];
-              borderProps = [];
-          }
-          var featureTypes = [FeatureType.POLYGON, FeatureType.LINE, FeatureType.POINT];
-          // 已有的面、线、点集合重绘
-          for (var _i = 0, featureTypes_1 = featureTypes; _i < featureTypes_1.length; _i++) {
-              var featureType = featureTypes_1[_i];
-              if (!drawing) {
-                  var featureProps_1 = this._features[featureType].map(function (feature) {
-                      // 多边形边框
-                      if (feature.featureType === FeatureType.POLYGON) {
-                          borderProps.push(_this.featureMap(feature._line, fbo));
-                      }
-                      // 节点
-                      if (feature.featureType === FeatureType.LINE || feature.featureType === FeatureType.POLYGON) {
-                          feature.nodes.forEach(function (node) {
-                              nodeProps.push(_this.featureMap(node, fbo));
-                          });
-                      }
-                      return _this.featureMap(feature, fbo);
-                  });
-                  _featureProps[featureType] = featureProps_1;
-                  if (featureType === FeatureType.POLYGON) {
-                      _featureProps[FeatureType.BORDER] = borderProps;
-                  }
-                  if (featureType === FeatureType.LINE || featureType === FeatureType.POLYGON) {
-                      _featureProps[FeatureType.NODE] = nodeProps;
-                  }
-              }
-              var featureProps = _featureProps[featureType];
-              if (featureProps.length > 0) {
-                  this.drawBatch(featureType, featureProps, fbo);
-              }
-              // 绘制多边形边框
-              if (featureType === FeatureType.POLYGON) {
-                  if (_featureProps[FeatureType.BORDER].length > 0) {
-                      this.drawBatch(FeatureType.BORDER, _featureProps[FeatureType.BORDER], fbo);
-                  }
-              }
-              // 绘制节点
-              if (featureType === FeatureType.LINE || featureType === FeatureType.POLYGON) {
-                  if (_featureProps[FeatureType.NODE].length > 0) {
-                      this.drawBatch(FeatureType.NODE, _featureProps[FeatureType.NODE], fbo);
-                  }
-              }
-          }
-          // 正在绘制的点线面重绘, 并且帧缓冲区不绘制正在绘制的要素
-          if (this._newFeature && !fbo) {
-              var featureType = this._newFeature.featureType;
-              var newFeatureProps = this.featureMap(this._newFeature, fbo);
-              this.drawBatch(featureType, newFeatureProps, fbo);
-              if (featureType === FeatureType.POLYGON) {
-                  var borderFeature = this._newFeature._line;
-                  var borderFeatureProps = this.featureMap(borderFeature, fbo);
-                  this.drawBatch(FeatureType.BORDER, borderFeatureProps, fbo);
-              }
-              if (featureType === FeatureType.LINE || featureType === FeatureType.POLYGON) {
-                  var nodes = this._newFeature.nodes;
-                  var featureProps = nodes.map(function (node) {
-                      return _this.featureMap(node, fbo);
-                  });
-                  this.drawBatch(FeatureType.NODE, featureProps, fbo);
-              }
-          }
-      };
-      Editor.prototype.drawing = function () {
-          this.repaint({
-              drawing: true,
-              fbo: false
-          });
-      };
-      Editor.prototype.featureMap = function (feature, fbo) {
+      Editor.prototype.featureMap = function (feature) {
           // 重新计算顶点的位置，索引，样式
-          !fbo && feature.repaint();
-          var featureType = feature.featureType, positionBuffer = feature.positionBuffer, offsetBuffer = feature.offsetBuffer, texCoordBuffer = feature.texCoordBuffer, texture = feature.texture, elements = feature.elements, _pickColor = feature._pickColor, style = feature.style;
-          // 缓冲区中绘制拾取颜色
-          var color = fbo ? _pickColor : style.color;
+          feature.repaint();
+          // 要素属性信息
+          var featureType = feature.featureType, positionBuffer = feature.positionBuffer, elements = feature.elements, style = feature.style;
           // 获得投影矩阵
-          var modelMatrix = this._context._shapeConfig.getModelMatrix();
+          var modelMatrix = this.getModelMatrix();
           // 基础属性，点线面都包含
-          var props = __assign(__assign({ _id: feature._id, positionBuffer: positionBuffer }, style), { color: color,
+          var props = __assign({ positionBuffer: positionBuffer,
               modelMatrix: modelMatrix,
-              elements: elements });
+              elements: elements }, style);
           switch (featureType) {
               case FeatureType.BORDER:
               case FeatureType.LINE:
-                  var width = fbo ? 20 : style.width;
-                  return __assign(__assign({}, props), { width: width,
-                      offsetBuffer: offsetBuffer });
+                  var offsetBuffer = feature.offsetBuffer;
+                  return __assign(__assign({}, props), { offsetBuffer: offsetBuffer });
               case FeatureType.POLYGON:
                   return props;
               case FeatureType.NODE:
-                  var size = fbo ? 40 : style.size;
-                  return __assign(__assign({}, props), { size: size });
+                  return props;
               case FeatureType.POINT:
+                  var _a = feature, texCoordBuffer = _a.texCoordBuffer, texture = _a.texture;
                   return __assign(__assign({}, props), { texCoordBuffer: texCoordBuffer,
-                      texture: texture, fbo: !!fbo });
+                      texture: texture });
           }
       };
       /**
-       * 新绘制的要素添加到要素缓存中
+       * 同类型的要素进行批量绘制
+       * @param featureType 要素类型
+       * @param featureProps 要素属性
+       */
+      Editor.prototype.drawBatch = function (featureType, featureProps) {
+          var _this = this;
+          // 线不需要开启alpha混合
+          var blendEnable = featureType !== FeatureType.LINE;
+          // 嵌套 + 批量 绘制
+          this.regl({
+              blend: {
+                  enable: blendEnable,
+                  func: {
+                      src: 'src alpha',
+                      dst: 'one minus src alpha'
+                  }
+              },
+              depth: {
+                  mask: false
+              }
+          })(function () {
+              // 需要使用α混合，添加透明度
+              _this.drawCalls[featureType](featureProps);
+          });
+      };
+      /**
+       * 刷新画布
+       */
+      Editor.prototype.refresh = function () {
+          var _a = this, regl = _a.regl, mapContainer = _a.config.mapContainer;
+          // 窗口尺寸变化，需要重新设置webgl的viewport
+          if (this.isRefresh) {
+              var dpr = window.devicePixelRatio;
+              var w = mapContainer.clientWidth;
+              var h = mapContainer.clientHeight;
+              var canvas = regl._gl.canvas;
+              canvas.width = w * dpr;
+              canvas.height = h * dpr;
+              canvas.style.width = w + 'px';
+              canvas.style.height = h + 'px';
+              this.isRefresh = false;
+              // 重新设置viewport
+              regl._refresh();
+          }
+          // 重置颜色缓冲区和深度缓存区
+          regl.clear({
+              color: [0, 0, 0, 0],
+              depth: 1
+          });
+      };
+      /**
+       * 要素加入到要素集中
        * @param feature
        */
-      Editor.prototype._addFeature = function (feature) {
+      Editor.prototype.addFeature = function (feature) {
           var featureType = feature.featureType;
-          this._features[featureType].push(feature);
+          var features = this.features[featureType];
+          if (features.includes(feature)) {
+              return;
+          }
+          features.push(feature);
       };
       /**
-       * 根据要素ID查询要素
-       * @param featureId
+       * 经纬度转屏幕像素坐标
+       * @param lngLat
        */
-      Editor.prototype.getFeature = function (featureId) {
-          var _this = this;
-          var feature = null;
-          Object.keys(this._features).forEach(function (featureType) {
-              // 要素已经找到了
-              if (feature) {
-                  return;
-              }
-              feature = _this._features[featureType].find(function (feature) {
-                  return feature._id === featureId;
-              });
-          });
-          return feature;
-      };
-      Editor.prototype.changeIds = function (ids) {
-          var _this = this;
-          if (ids === void 0) { ids = {}; }
-          // TODO：修改节点绑定的attachIds
-          Object.keys(ids).forEach(function (oldId) {
-              var newId = ids[oldId];
-              Object.keys(_this._features).forEach(function (featureType) {
-                  var features = _this._features[featureType];
-                  var feature = features.find(function (feature) {
-                      return feature._id.indexOf(oldId) > -1;
-                  });
-                  if (feature) {
-                      feature.setId(newId);
-                  }
-              });
-          });
+      Editor.prototype.lngLatToPix = function (lngLat) {
+          return this.config.lngLatToPix(lngLat);
       };
       /**
-       * 清空画板
+       * 模型变换矩阵
+       * 该矩阵会将屏幕像素坐标转成webgl裁剪坐标
        */
-      Editor.prototype.clear = function () {
-          this._init();
-          this._clearTick();
-          this.repaint();
-      };
-      Editor.prototype._clearTick = function () {
-          if (this._tick) {
-              this._tick.cancel();
-              this._tick = null;
-          }
-          if (this._pickTick) {
-              clearTimeout(this._pickTick);
-              this._pickTick = null;
-          }
+      Editor.prototype.getModelMatrix = function () {
+          return this.config.getModelMatrix();
       };
       return Editor;
-  }());
+  }(Evented));
 
   const {
     Renderer,
@@ -12650,20 +10133,28 @@
     }
   } = L__default['default']; // 继承render
 
-  const WebglLeaflet = Renderer.extend({
+  const Leaflet = Renderer.extend({
+    /**
+     * 鼠标点击事件
+     */
+    clickFn: null,
+
+    /**
+     * 鼠标移动事件
+     */
+    moveFn: null,
     getEvents: function () {
       var events = Renderer.prototype.getEvents.call(this); // 鼠标拖动实时绘制
 
       events.move = this._update;
-      events.zoom = this._update;
       events.movestart = this._movestart;
       return events;
     },
     onAdd: function () {
       // canvas 添加到dom中
-      Renderer.prototype.onAdd.call(this); // 开始绘制
+      Renderer.prototype.onAdd.call(this); // 加载编辑器
 
-      this._draw();
+      this.createEditor();
     },
     _initContainer: function () {
       var container = this._container = document.createElement('canvas');
@@ -12676,14 +10167,21 @@
         throw new Error('Webgl is not supported in your broswer');
       }
     },
-    _draw: function () {
-      // webgl 编辑器，初始化
+
+    /**
+     * 创建编辑器
+     */
+    createEditor: function () {
+      const mapContainer = this._map.getContainer(); // 编辑器初始化
+
+
       this._editor = new Editor(this.gl, {
-        lngLatsToPoints: this._LngLatsToPointsCall(),
-        getModelMatrix: this._getModelMatrixCall()
+        lngLatToPix: this.lngLatToPoint.bind(this),
+        getModelMatrix: this.getModelMatrix.bind(this),
+        mapContainer: mapContainer
       }); // 拾取事件
 
-      this._editor._context.on('picked:click picked:mousemove', ({
+      this._editor.on('picked:click picked:mousemove', ({
         type,
         feature
       }) => {
@@ -12702,10 +10200,22 @@
       }); // 绘制完成事件
 
 
-      this._editor._context.on('finish', feature => {
+      this._editor.on('finish', feature => {
         this.fire('finish', {
           feature
         });
+      }); // 纹理加载完成
+
+
+      this._editor.on('textured', feature => {
+        this.fire('load');
+      }); // 地图容器尺寸发生变化
+
+
+      this._map.on('resize', () => {
+        this._editor.isRefresh = true;
+
+        this._editor.repaint();
       });
     },
 
@@ -12714,6 +10224,10 @@
      * @param {*} featureType 要素类型
      */
     start: function (featureType) {
+      if (!this._editor) {
+        throw new Error('未添加编辑器图层');
+      }
+
       const {
         doubleClickZoom
       } = this._map.options; // 禁用双击放大事件
@@ -12722,17 +10236,25 @@
         this._map.doubleClickZoom.disable();
       }
 
-      let clickFn = null,
-          moveFn = null; // 通过回调，将editor和具体的地图api分割开，方便将来与其它地图API做适配，比如：mapbox
+      if (this.clickFn) {
+        this._map.off('click', this.clickFn);
+      }
+
+      if (this.moveFn) {
+        this._map.off('mousemove', this.moveFn);
+      } // 通过回调，将editor和具体的地图api分割开，方便将来与其它地图API做适配，比如：mapbox
+
 
       this._editor.start(featureType, (mouseClick, mouseMove) => {
-        clickFn = evt => {
+        this.clickFn = evt => {
           const lngLat = evt.latlng;
           mouseClick(lngLat, () => {
-            this._map.off('click', clickFn);
+            this._map.off('click', this.clickFn);
 
-            this._map.off('mousemove', moveFn); // 绘制完成恢复双击放大
+            this._map.off('mousemove', this.moveFn);
 
+            this.clickFn = null;
+            this.moveFn = null; // 绘制完成恢复双击放大
 
             if (doubleClickZoom) {
               setTimeout(() => {
@@ -12742,14 +10264,14 @@
           });
         };
 
-        moveFn = evt => {
+        this.moveFn = evt => {
           const lngLat = evt.latlng;
           mouseMove(lngLat);
         };
 
-        this._map.on('click', clickFn);
+        this._map.on('click', this.clickFn);
 
-        this._map.on('mousemove', moveFn);
+        this._map.on('mousemove', this.moveFn);
       });
     },
 
@@ -12791,30 +10313,32 @@
       }
     },
 
-    _LngLatsToPointsCall() {
-      return lngLatToPoint(lngLat => {
-        const {
-          x,
-          y
-        } = this._map.latLngToContainerPoint(L__default['default'].latLng(lngLat.lat, lngLat.lng));
+    /**
+     * 经纬度转地图容器像素坐标
+     * @param {*} lngLat 
+     */
+    lngLatToPoint(lngLat) {
+      const {
+        x,
+        y
+      } = this._map.latLngToContainerPoint(L__default['default'].latLng(lngLat.lat, lngLat.lng));
 
-        return {
-          x,
-          y
-        };
-      });
+      return {
+        x,
+        y
+      };
     },
 
-    _getModelMatrixCall() {
-      return () => {
-        const {
-          x: w,
-          y: h
-        } = this._map.getSize(); // glsl中的矩阵是主列矩阵
+    /**
+     * 像素坐标转webgl坐标的模型变换矩阵
+     */
+    getModelMatrix() {
+      const mapContainer = this._map.getContainer();
 
+      const w = mapContainer.clientWidth;
+      const h = mapContainer.clientHeight; // glsl中的矩阵是主列矩阵
 
-        return [2 / w, 0, 0, 0, -2 / h, 0, -1, 1, 1];
-      };
+      return [2 / w, 0, 0, 0, -2 / h, 0, -1, 1, 1];
     },
 
     _onClick: function (e) {// var point = this._map.mouseEventToLayerPoint(e);
@@ -12823,7 +10347,7 @@
 
     _movestart() {
       if (this._editor) {
-        this._editor._context.setMapStatus('movestart');
+        this._editor.context.setMapStatus('movestart');
       }
     },
 
@@ -12838,8 +10362,6 @@
     _fireEvent: function (layers, e, type) {
       this._map._fireDOMEvent(e, type || e.type, layers);
     },
-    _bringToFront: function (layer) {},
-    _bringToBack: function (layer) {},
     _destroyContainer: function () {
       cancelAnimFrame(this._redrawRequest);
       delete this.gl;
@@ -12849,14 +10371,19 @@
     }
   });
 
-  function drawEdit() {
-      var wl = new WebglLeaflet({
-          padding: 0,
-          zoomAnimation: false
-      });
-      return wl;
+  let editor = null;
+
+  function glEdit() {
+    if (editor) {
+      throw new Error('GlEditor has been initialized!');
+    }
+
+    editor = new Leaflet({
+      padding: 0
+    });
+    return editor;
   }
 
-  return drawEdit;
+  return glEdit;
 
 })));

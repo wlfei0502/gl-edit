@@ -11,11 +11,12 @@ import { uglify } from 'rollup-plugin-uglify';
 export default {
     input: 'src/index.ts',
     output: {
-        file: 'dist/leaflet-draw-edit.min.js',
+        file: 'dist/gl-edit.min.js',
         format: 'umd',
-        name: 'L.drawEdit',
+        name: 'glEdit',
         globals: {
-            'L':'L'
+            'L':'L',
+            'regl':'regl'
         }
     },
     plugins: [
@@ -31,5 +32,9 @@ export default {
         image(),
         json(),
         uglify(),
+    ],
+    external: [
+        'leaflet',
+        'regl'
     ]
 };

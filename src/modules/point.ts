@@ -1,8 +1,6 @@
 import REGL from "regl";
 import { LngLat, Modes } from "./types";
-import { base64ToUint8Array } from '../util/util';
 
-import img from '../assets/texture.png';
 import json from '../assets/texture.json';
 
 import Shape from "./shape";
@@ -20,12 +18,14 @@ const DEFAULT_INFO = {
 
 const imgWidth = 512, imgHeight = 128;
 
+let textureData = null;
+
 class Point extends Shape {
     texture: REGL.Texture;
     texCoordBuffer: REGL.Buffer;
 
     constructor (context: Context, info:any = DEFAULT_INFO) {
-        super(context, info);
+        super(context, info, DEFAULT_INFO);
         this.featureType = 'point';
 
         // 初始化绘制配置
@@ -36,17 +36,13 @@ class Point extends Shape {
     }
 
     _initDraw () {
-
         const { _regl } = this._context;
-
-        base64ToUint8Array(img, (data) => {
-            this.texture = _regl.texture({
-                width: imgWidth,
-                height: imgHeight,
-                data
-            });
+        this.texture = _regl.texture({
+            width: imgWidth,
+            height: imgHeight,
+            data: this._context._texture
         });
-
+        
         this.positionBuffer = _regl.buffer({
             usage: 'dynamic',
             type: 'float',

@@ -2,6 +2,10 @@ import { Modes, FeatureType, ShapeConfig, PointProps, LineProps, PolygonProps, N
 
 import Context from './context';
 
+import { base64ToUint8Array } from '../util/util';
+
+import img from '../assets/texture.png';
+
 import Point from './Point';
 import Line from './line';
 import Polygon from './polygon';
@@ -50,11 +54,15 @@ class Editor {
     // 拾取定时器，防止频繁拾取
     _pickTick = null;
 
-    constructor (gl: WebGLRenderingContext, shapeConfig:ShapeConfig) {
+    _mapContainer: HTMLElement;
+
+    constructor (gl: WebGLRenderingContext, shapeConfig:ShapeConfig, mapContainer:HTMLElement) {
         this._context = new Context({
             gl,
             shapeConfig
         });
+
+        this._mapContainer = mapContainer;
 
         // 初始化变量
         this._init ();
@@ -83,11 +91,6 @@ class Editor {
      * 事件监听
      */
     _initializeEvent (): void {
-        // 窗口变化，重置viewport
-        window.addEventListener('resize', () => {
-            this._isPoll = true;
-        });
-
         // 重绘
         this._context.on('repaint', this.repaint, this);
 
@@ -117,7 +120,13 @@ class Editor {
             this._pickTick = setTimeout(() => {
                 this.pickEvent(event);
                 this._pickTick = null;
-            }, 30);
+            }, 60);
+        });
+
+        // 纹理加载
+        base64ToUint8Array(img, (data) => {
+            this._context._texture = data;
+            this._context.fire('textured');
         });
     }
 
@@ -129,14 +138,14 @@ class Editor {
         const evt = event as PointerEvent;
         const { clientX, clientY, type } = evt;
 
-        const { _gl, _regl, mapStatus, mode } = this._context;
+        const { _regl, mapStatus, mode } = this._context;
 
         // 等待，编辑状态，不允许点击拾取
         if ((mode === Modes.WATING || mode === Modes.EDITING) && type === 'click') {
             return;
         }
 
-        // 底图移动，不触发点击拾取动作
+        // 底图移动，不触发点击拾取动作, 否则选中效果会消失
         if (mapStatus === 'movestart' && type === 'click') {
             this._context.setMapStatus('');
             return;
@@ -145,11 +154,20 @@ class Editor {
         // 设备像素比
         const dpr = window.devicePixelRatio;
 
-        const target = evt.target as HTMLElement;
+        // const target = evt.target as HTMLElement;
+        const target = this._mapContainer;
         const rect = target.getBoundingClientRect();
 
         const x = dpr * (clientX - rect.left);
-        const y = _gl.drawingBufferHeight - dpr * (clientY - rect.top);
+        const y = _regl._gl.drawingBufferHeight - dpr * (clientY - rect.top);
+
+        if (x < 0 || x >= _regl._gl.drawingBufferWidth) {
+            return;
+        }
+
+        if (y < 0 || y >= _regl._gl.drawingBufferHeight) {
+            return;
+        }
 
         // 创建帧缓冲区
         const fbo = _regl.framebuffer({
@@ -162,16 +180,23 @@ class Editor {
 
         // 使用帧缓冲区
         _regl({ framebuffer: fbo })(()=>{
+
             // 重绘图形到fbo
             this.repaint({ fbo: true, drawing: false });
 
-            // 拾取鼠标点击位置的颜色
-            const rgba = _regl.read({
-                x,
-                y,
-                width: 1,
-                height: 1
-            });
+            let rgba = new Float32Array([0, 0, 0, 0]);
+
+            try {
+                // 拾取鼠标点击位置的颜色
+                rgba = _regl.read({
+                    x,
+                    y,
+                    width: 1,
+                    height: 1
+                });
+            } catch (error) {
+                console.log(error);
+            }
 
             // 销毁帧缓冲区
             fbo.destroy();
@@ -397,23 +422,23 @@ class Editor {
      * @param geos
      * @param retain 是否保留新标绘的要素
      */
-    render (geos = {}, retain = true){
+    render (geos = {}){
         // 重绘当前视野的元素
         const featureTypes = [ FeatureType.POLYGON, FeatureType.LINE, FeatureType.POINT ];
 
-        // 刷新当前视野元素的时候，新标绘的要素不删除
-        if (retain) {
-            featureTypes.forEach(featureType => {
-                const retainFeatures = this._features[featureType];
-                this._features[featureType] = [];
-                
-                for(const feature of retainFeatures){
-                    if (feature._id.startsWith('id_')) {
-                        this._features[featureType].push(feature);
-                    }
+        // 刷新当前视野元素的时候，新标绘的要素不删除, 数据库中已经存储的要素需要销毁删除
+        featureTypes.forEach(featureType => {
+            const features = this._features[featureType];
+            this._features[featureType] = [];
+            
+            for(const feature of features){
+                if (feature._id.startsWith('id_')) {
+                    this._features[featureType].push(feature);
+                } else {
+                    feature.destroy();
                 }
-            });
-        }
+            }
+        });
 
         // 接受新的要素
         featureTypes.forEach(featureType => {
@@ -425,7 +450,6 @@ class Editor {
 
             this._features[featureType] = this._features[featureType].concat(featuresMap);
         });
-
         // 重绘
         this.repaint();
     }
@@ -520,8 +544,17 @@ class Editor {
 
         // 窗口尺寸变化，需要重新设置webgl的viewport
         if (this._isPoll) {
-            _regl.poll();
+            const dpr = window.devicePixelRatio;
+            const w = this._mapContainer.clientWidth;
+            const h = this._mapContainer.clientHeight;
+            const { canvas } = _regl._gl;
+            canvas.width = w * dpr ;
+            canvas.height = h * dpr;
+            (canvas as HTMLElement).style.width = w + 'px';
+            (canvas as HTMLElement).style.height = h + 'px';
             this._isPoll = false;
+            // 重新设置viewport
+            _regl._refresh();
         }
 
         // 重置颜色缓冲区和深度缓存区
@@ -543,7 +576,6 @@ class Editor {
         }
 
         const featureTypes = [FeatureType.POLYGON, FeatureType.LINE, FeatureType.POINT];
-
         // 已有的面、线、点集合重绘
         for (const featureType of featureTypes) {
             if (!drawing) {
@@ -554,7 +586,7 @@ class Editor {
                     }
 
                     // 节点
-                    if (feature.featureType === FeatureType.LINE || feature.featureType === FeatureType.POLYGON) {
+                    if (feature.featureType === FeatureType.LINE) {
                         feature.nodes.forEach(node => {
                             nodeProps.push(this.featureMap(node, fbo));
                         });
@@ -569,26 +601,23 @@ class Editor {
                     _featureProps[FeatureType.BORDER] = borderProps;
                 }
 
-                if (featureType === FeatureType.LINE || featureType === FeatureType.POLYGON) {
+                if (featureType === FeatureType.LINE) {
                     _featureProps[FeatureType.NODE] = nodeProps;
                 }
             }
 
             const featureProps = _featureProps[featureType];
-
             if (featureProps.length > 0) {
                 this.drawBatch (featureType, featureProps, fbo);
             }
-
             // 绘制多边形边框
             if (featureType === FeatureType.POLYGON) {
                 if (_featureProps[FeatureType.BORDER].length > 0) {
                     this.drawBatch (FeatureType.BORDER, _featureProps[FeatureType.BORDER], fbo);
                 }
             }   
-
             // 绘制节点
-            if (featureType === FeatureType.LINE || featureType === FeatureType.POLYGON) {
+            if (featureType === FeatureType.LINE) {
                 if (_featureProps[FeatureType.NODE].length > 0) {
                     this.drawBatch (FeatureType.NODE, _featureProps[FeatureType.NODE], fbo);
                 }
@@ -607,7 +636,7 @@ class Editor {
                 this.drawBatch (FeatureType.BORDER, borderFeatureProps, fbo);
             }
 
-            if (featureType === FeatureType.LINE || featureType === FeatureType.POLYGON) {
+            if (featureType === FeatureType.LINE) {
                 const nodes = this._newFeature.nodes;
 
                 const featureProps = nodes.map(node => {

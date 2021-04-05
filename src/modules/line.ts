@@ -12,7 +12,7 @@ const DEFAULT_INFO = {
     lngLats: [], 
     style: {
         width: 3,
-        color: [255, 255, 255, 255]
+        color: [255, 0, 0, 255]
     }
 }
 
@@ -21,7 +21,7 @@ class Line extends Shape {
     nodes: Node [] = [];
 
     constructor (context: Context, info: any = DEFAULT_INFO) {
-        super(context, info);
+        super(context, info, DEFAULT_INFO);
         
         this.featureType = 'line';
 
@@ -205,13 +205,19 @@ class Line extends Shape {
             return;
         }
 
-        const first = this.nodes[0];
-        const last = this.nodes[this.nodes.length - 1];
+        this.nodesDestroy();
 
-        first.setId(`${this._id}_node_0`);
-        last.setId(`${this._id}_node_1`);
+        const first = this._lngLats[0];
+        const last = this._lngLats[this._lngLats.length - 1];
 
-        this.nodes = [first, last];
+        this.nodes = [first, last].map((lngLat, index) => {
+            const node = this.createNode(lngLat, index);
+            node.setStyle({
+                size: 18
+            }, false);
+
+            return node;
+        });
 
         // 重绘
         this._context.fire('repaint');
@@ -221,8 +227,8 @@ class Line extends Shape {
      * 要素被选中
      */
     select () {
-        this.nodes = [];
-        
+        this.nodesDestroy();
+
         this._lngLats.forEach((lngLat, index) => {
             const node = this.createNode (lngLat, index);
 
@@ -236,6 +242,22 @@ class Line extends Shape {
         // 重绘
         this._context.fire('repaint');
     }
+
+    nodesDestroy () {
+        this.nodes.forEach(node => {
+            node.destroy();
+        });
+
+        this.nodes = [];
+    }
+
+    destroy () {
+        // 节点销毁
+        this.nodesDestroy ();
+        // 线销毁
+        super.destroy();
+    }
 }
 
 export default Line;
+ 

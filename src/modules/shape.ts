@@ -16,9 +16,9 @@ abstract class Shape {
     style: any;                           // 样式：宽度、颜色
     featureType: string;
 
-    constructor (context:Context, featureInfo:any) {
+    constructor (context:Context, featureInfo:any, defaultInfo = {}) {
         this._context = context;
-
+        featureInfo = { ...defaultInfo, ...featureInfo };
         const { id = '0', lngLats = [], style = {} } = featureInfo;
 
         this._id = id === '0' ? generateUUID() : id;
@@ -159,7 +159,6 @@ abstract class Shape {
     destroy () {
         this._lngLats = [];
         this._context.off('pick-start', this._pickStart, this);
-        this._context.fire('repaint');
     }
 }
 

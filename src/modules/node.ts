@@ -6,7 +6,7 @@ class Node extends Shape {
     attachIds: string[] = [];
 
     constructor (context: Context, info:any) {
-        super(context, info);
+        super(context, info, {});
 
         this.featureType = 'node';
 

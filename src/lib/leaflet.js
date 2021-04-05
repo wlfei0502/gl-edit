@@ -1,6 +1,6 @@
 import L from 'leaflet';
 import { lngLatToPoint } from '../util/util';
-import Editor from '../modules/editor';
+import Editor from './editor';
 
 const { 
     Renderer, 
@@ -10,13 +10,19 @@ const {
 } = L;
 
 // 继承render
-const WebglLeaflet = Renderer.extend({
-
+const Leaflet = Renderer.extend({
+    /**
+     * 鼠标点击事件
+     */
+    clickFn: null,
+    /**
+     * 鼠标移动事件
+     */
+    moveFn: null,
     getEvents: function () {
         var events = Renderer.prototype.getEvents.call(this);
         // 鼠标拖动实时绘制
-        // events.move = this._update;
-        events.moveend = this._update;
+        events.move = this._update;
         events.movestart = this._movestart;
         return events;
     },
@@ -24,8 +30,8 @@ const WebglLeaflet = Renderer.extend({
     onAdd: function () {
         // canvas 添加到dom中
         Renderer.prototype.onAdd.call(this);
-        // 开始绘制
-        this._draw();
+        // 加载编辑器
+        this.createEditor();
     },
 
     _initContainer: function () {
@@ -42,15 +48,21 @@ const WebglLeaflet = Renderer.extend({
         }
     },
 
-    _draw: function () {
-        // webgl 编辑器，初始化
+    /**
+     * 创建编辑器
+     */
+    createEditor: function () {
+        const mapContainer = this._map.getContainer();
+
+        // 编辑器初始化
         this._editor = new Editor(this.gl, {
-            lngLatsToPoints: this._LngLatsToPointsCall(),
-            getModelMatrix: this._getModelMatrixCall()
-        }, this._map.getContainer());
+            lngLatToPix: this.lngLatToPoint.bind(this),
+            getModelMatrix: this.getModelMatrix.bind(this),
+            mapContainer: mapContainer
+        });
 
         // 拾取事件
-        this._editor._context.on('picked:click picked:mousemove', ({
+        this._editor.on('picked:click picked:mousemove', ({
             type,
             feature
         }) => {
@@ -69,20 +81,20 @@ const WebglLeaflet = Renderer.extend({
         });
 
         // 绘制完成事件
-        this._editor._context.on('finish', (feature) => {
+        this._editor.on('finish', (feature) => {
             this.fire('finish', {
                 feature
             });
         });
 
         // 纹理加载完成
-        this._editor._context.on('textured', (feature) => {
+        this._editor.on('textured', (feature) => {
             this.fire('load');
         });
 
         // 地图容器尺寸发生变化
         this._map.on('resize', () => {
-            this._editor._isPoll = true;
+            this._editor.isRefresh = true;
             this._editor.repaint();
         });
     },
@@ -97,22 +109,29 @@ const WebglLeaflet = Renderer.extend({
         }
 
         const { doubleClickZoom } = this._map.options;
-
         // 禁用双击放大事件
         if (doubleClickZoom) {
             this._map.doubleClickZoom.disable();
         }
 
-        let clickFn = null, moveFn = null;
+        if (this.clickFn) {
+            this._map.off('click', this.clickFn);
+        }
+
+        if (this.moveFn) {
+            this._map.off('mousemove', this.moveFn);
+        }
 
         // 通过回调，将editor和具体的地图api分割开，方便将来与其它地图API做适配，比如：mapbox
         this._editor.start(featureType, (mouseClick, mouseMove) => {
-            clickFn = (evt) => {
+            this.clickFn = (evt) => {
                 const lngLat = evt.latlng;
-                // 点击绘制
                 mouseClick(lngLat, () => {
-                    this._map.off('click', clickFn);
-                    this._map.off('mousemove', moveFn);
+                    this._map.off('click', this.clickFn);
+                    this._map.off('mousemove', this.moveFn);
+
+                    this.clickFn = null;
+                    this.moveFn = null;
 
                     // 绘制完成恢复双击放大
                     if (doubleClickZoom) {
@@ -123,14 +142,13 @@ const WebglLeaflet = Renderer.extend({
                 });
             };
 
-            moveFn = (evt) => {
+            this.moveFn = (evt) => {
                 const lngLat = evt.latlng;
-                // 移动绘制
                 mouseMove(lngLat);
             }
 
-            this._map.on('click', clickFn);
-            this._map.on('mousemove', moveFn);
+            this._map.on('click', this.clickFn);
+            this._map.on('mousemove', this.moveFn);
         });
     },
 
@@ -175,24 +193,29 @@ const WebglLeaflet = Renderer.extend({
         }
     },
 
-    _LngLatsToPointsCall () {
-        return lngLatToPoint((lngLat) => {
-            const { x, y} = this._map.latLngToContainerPoint(L.latLng(lngLat.lat, lngLat.lng));
-            return {
-                x, y
-            }
-        });
+    /**
+     * 经纬度转地图容器像素坐标
+     * @param {*} lngLat 
+     */
+    lngLatToPoint (lngLat) {
+        const { x, y} = this._map.latLngToContainerPoint(L.latLng(lngLat.lat, lngLat.lng));
+
+        return {
+            x, 
+            y
+        }
     },
 
-    _getModelMatrixCall () {
-        return () => {
-            const mapContainer = this._map.getContainer();
-            const w = mapContainer.clientWidth;
-            const h = mapContainer.clientHeight;
+    /**
+     * 像素坐标转webgl坐标的模型变换矩阵
+     */
+    getModelMatrix () {
+        const mapContainer = this._map.getContainer();
+        const w = mapContainer.clientWidth;
+        const h = mapContainer.clientHeight;
 
-            // glsl中的矩阵是主列矩阵
-            return [ 2 / w, 0, 0, 0, -2 / h, 0, -1, 1, 1 ];
-        }
+        // glsl中的矩阵是主列矩阵
+        return [ 2 / w, 0, 0, 0, -2 / h, 0, -1, 1, 1 ];
     },
 
     _onClick: function (e) {
@@ -203,7 +226,7 @@ const WebglLeaflet = Renderer.extend({
 
     _movestart () {
         if (this._editor) {
-            this._editor._context.setMapStatus('movestart');
+            this._editor.context.setMapStatus('movestart');
         }
     },
 
@@ -225,13 +248,6 @@ const WebglLeaflet = Renderer.extend({
         this._map._fireDOMEvent(e, type || e.type, layers);
     },
 
-    _bringToFront: function (layer) {
-    },
-
-    _bringToBack: function (layer) {
-
-    },
-
     _destroyContainer: function () {
         cancelAnimFrame(this._redrawRequest);
         delete this.gl;
@@ -241,4 +257,4 @@ const WebglLeaflet = Renderer.extend({
     },
 });
 
-export default WebglLeaflet;
+export default Leaflet;

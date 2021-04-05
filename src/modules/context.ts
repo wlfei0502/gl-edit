@@ -31,6 +31,7 @@ class Context extends Evented{
     _regl: REGL.Regl;
     _shapeConfig: ShapeConfig;
     _hover = false;
+    _texture = null;
 
     constructor({ gl , shapeConfig }) {
         super();

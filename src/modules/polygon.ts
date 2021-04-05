@@ -11,15 +11,13 @@ const DEFAULT_INFO = { id: '0', lngLats: [], style: { color: [255, 0, 0, 120] } 
 class Polygon extends Shape {
     _line: Line; // 线
 
-    nodes: Node[] = [];
-
     /**
      * 
      * @param context 
      * @param info  { id: '0', lngLats: [], style: { color: [255, 0, 0, 120] }}
      */
     constructor (context: Context, info:any = DEFAULT_INFO) {
-        super(context, info);
+        super(context, info, DEFAULT_INFO);
 
         this.featureType = 'polygon';
         const lineId = `${this._id}_border`;
@@ -152,6 +150,14 @@ class Polygon extends Shape {
 
     select () {
 
+    }
+
+    destroy () {
+        super.destroy();
+
+        if (this._line) {
+            this._line.destroy();
+        }
     }
 }
 
