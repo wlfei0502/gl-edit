@@ -119,6 +119,14 @@
     });
     return uuid;
   }
+  function base64ToUint8Array(base64, callback) {
+    const img = new Image();
+    img.src = base64;
+
+    img.onload = function () {
+      callback(img);
+    };
+  }
   /**
    * 对象深度合并
    * @param {*} obj1 
@@ -9751,7 +9759,7 @@
       lngLats: [],
       style: {
           width: 3,
-          color: [255, 0, 0, 255]
+          color: [26, 255, 255, 255]
       }
   };
   var Line = /** @class */ (function (_super) {
@@ -9891,11 +9899,117 @@
       return Node;
   }(Shape));
 
+  var json = {
+  	"0": {
+  	width: 27,
+  	height: 42,
+  	x: 1,
+  	y: 44
+  }
+  };
+
+  var DEFAULT_INFO$1 = {
+      id: '0',
+      lngLats: null,
+      style: {
+          code: '0',
+          color: [0, 0, 0, 0]
+      }
+  };
+  var IMG_WIDTH = 512, IMG_HEIGHT = 128;
   var Point = /** @class */ (function (_super) {
       __extends(Point, _super);
-      function Point() {
-          return _super !== null && _super.apply(this, arguments) || this;
+      function Point(editor, featureInfo) {
+          var _this = _super.call(this, editor, featureInfo, DEFAULT_INFO$1) || this;
+          _this.featureType = FeatureType.POINT;
+          // 初始化绘制配置
+          _this.initDraw();
+          return _this;
       }
+      /**
+       * 配置绘制点所需要的数据
+       */
+      Point.prototype.initDraw = function () {
+          var _a = this.editor, regl = _a.regl, texture = _a.texture;
+          if (!texture) {
+              throw new Error("Texture is not loaded.");
+          }
+          this.texture = regl.texture({
+              width: IMG_WIDTH,
+              height: IMG_HEIGHT,
+              data: texture
+          });
+          this.positionBuffer = regl.buffer({
+              usage: 'dynamic',
+              type: 'float'
+          });
+          this.texCoordBuffer = regl.buffer({
+              usage: 'dynamic',
+              type: 'float'
+          });
+          this.elements = regl.elements({
+              primitive: 'triangles',
+              usage: 'dynamic',
+              type: 'uint16',
+              count: 0,
+              length: 0
+          });
+      };
+      /**
+       * 等待标点，注册点击事件
+       * @param register
+       */
+      Point.prototype.waiting = function (register) {
+          var _this = this;
+          var context = this.editor.context;
+          // 地图点击事件
+          var mapClick = function (lngLat, drawFinish) {
+              // 进入编辑模式
+              context.enter(Modes.EDITING);
+              _this.lngLats = lngLat;
+              drawFinish();
+              _this.editor.drawFinish(_this);
+          };
+          // 鼠标在地图上移动事件
+          var mapMove = function (lngLat) { };
+          register(mapClick, mapMove);
+      };
+      /**
+       * 重绘
+       */
+      Point.prototype.repaint = function () {
+          if (!this.lngLats) {
+              return;
+          }
+          // 经纬度转屏幕像素坐标
+          var point = this.project(this.lngLats);
+          var _a = this.style.code, code = _a === void 0 ? '0' : _a;
+          var _b = json[code], width = _b.width, height = _b.height, texCoordX = _b.x, texCoordY = _b.y;
+          var ratio = window.devicePixelRatio;
+          var halfWidth = width / 2;
+          // 顶点位置平铺成一维的
+          var positions = [];
+          // 推算出四角点坐标，使得经纬度位置正好处于图标的正中下方
+          for (var p = 0; p < 4; p++) {
+              var cornerX = point.x + ((-1) * Math.pow(-1, p % 2)) * (halfWidth / ratio);
+              var cornerY = point.y + (Math.floor(p / 2) - 1) * (height / ratio);
+              positions.push(cornerX, cornerY);
+          }
+          // 更新缓冲区
+          // 顶点更新
+          this.positionBuffer(positions);
+          // 纹理坐标更新
+          var texCoords = [];
+          for (var t = 0; t < 4; t++) {
+              var x = texCoordX + width * (t % 2);
+              var y = texCoordY + height * Math.floor(t / 2);
+              texCoords.push(x / IMG_WIDTH, y / IMG_HEIGHT);
+          }
+          this.texCoordBuffer(texCoords);
+          // 索引更新
+          var indices = [0, 1, 2, 2, 1, 3];
+          this.elements(indices);
+      };
       return Point;
   }(Shape));
 
@@ -9906,6 +10020,8 @@
       }
       return Polygon;
   }(Shape));
+
+  var img = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAACACAMAAABKiSE5AAADJmlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4gPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgNS42LWMxMTEgNzkuMTU4MzI1LCAyMDE1LzA5LzEwLTAxOjEwOjIwICAgICAgICAiPiA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPiA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtbG5zOnhtcE1NPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvbW0vIiB4bWxuczpzdFJlZj0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL3NUeXBlL1Jlc291cmNlUmVmIyIgeG1wOkNyZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgQ0MgMjAxNSAoV2luZG93cykiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6NkRCMEZBMTA4Qjc3MTFFQjhBM0JGMkFBMDI0ODQyOEMiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6NkRCMEZBMTE4Qjc3MTFFQjhBM0JGMkFBMDI0ODQyOEMiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDo2REIwRkEwRThCNzcxMUVCOEEzQkYyQUEwMjQ4NDI4QyIgc3RSZWY6ZG9jdW1lbnRJRD0ieG1wLmRpZDo2REIwRkEwRjhCNzcxMUVCOEEzQkYyQUEwMjQ4NDI4QyIvPiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gPD94cGFja2V0IGVuZD0iciI/PrB+ZBgAAAAZdEVYdFNvZnR3YXJlAEFkb2JlIEltYWdlUmVhZHlxyWU8AAACZ1BMVEVHcEzy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";
 
   var _a$1;
   // 要素类型对应的要素类
@@ -9943,6 +10059,11 @@
           _this.config = config;
           // 创建绘制点线面的渲染器
           _this.drawCalls = createDrawCall(_this.regl);
+          // 加载纹理
+          base64ToUint8Array(img, function (data) {
+              _this.texture = data;
+              _this.fire('load');
+          });
           return _this;
       }
       /**
@@ -9953,13 +10074,14 @@
       Editor.prototype.start = function (featureType, register) {
           // 进入等待编辑模式
           this.context.enter(Modes.WATING);
-          // 先销毁上一次未完成绘制的要素
+          // 先移除上一次未完成绘制的要素
           if (this.drawingFeature) {
-              this.drawingFeature.destroy();
+              this.drawingFeature = null;
+              this.repaint();
           }
           // 创建新的要素
           this.drawingFeature = new featureClasses[featureType](this);
-          // 要素进入待编辑模式
+          // 新要素进入待编辑模式
           this.drawingFeature.waiting(register);
       };
       /**
@@ -9992,7 +10114,7 @@
           // 渲染已有要素，按照面、线、点的顺序绘制
           var featureTypes = [FeatureType.POLYGON, FeatureType.LINE, FeatureType.POINT];
           featureTypes.forEach(function (featureType) {
-              if (featureType !== FeatureType.LINE) {
+              if (featureType === FeatureType.POLYGON) {
                   return;
               }
               var features = _this.features[featureType];
@@ -10207,7 +10329,7 @@
       }); // 纹理加载完成
 
 
-      this._editor.on('textured', feature => {
+      this._editor.on('load', () => {
         this.fire('load');
       }); // 地图容器尺寸发生变化
 

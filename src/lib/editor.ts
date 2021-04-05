@@ -4,12 +4,15 @@ import Evented from './evented';
 import Context from './context';
 import createDrawCall from './drawCall';
 import { LngLat, Pix, DrawCalls, ShapeConfig, Modes, FeatureType, Features } from './types';
+import { base64ToUint8Array } from '../util/util';
 
 import Line from './line';
 import Node from './node';
 import Point from './point';
 import Polygon from './polygon';
 import Shape from './shape';
+
+import img from '../assets/texture.png';
 
 type Feature = Polygon | Line | Point;
 
@@ -45,6 +48,8 @@ class Editor extends Evented{
     };
     // 是否需要重新设置webgl的viewport，解决改变地图容器的大小，引起坐标偏移的问题
     isRefresh:boolean = false;
+    // 纹理对象
+    texture: REGL.TextureImageData;
 
     constructor (gl:WebGLRenderingContext, config:ShapeConfig) {
         super ();
@@ -56,6 +61,11 @@ class Editor extends Evented{
         this.config = config;
         // 创建绘制点线面的渲染器
         this.drawCalls = createDrawCall (this.regl);
+        // 加载纹理
+        base64ToUint8Array(img, (data) => {
+            this.texture = data;
+            this.fire('load');
+        });
     }
 
     /**
@@ -67,14 +77,15 @@ class Editor extends Evented{
         // 进入等待编辑模式
         this.context.enter(Modes.WATING);
 
-        // 先销毁上一次未完成绘制的要素
+        // 先移除上一次未完成绘制的要素
         if (this.drawingFeature) {
-            this.drawingFeature.destroy();
+            this.drawingFeature = null;
+            this.repaint();
         }
 
         // 创建新的要素
         this.drawingFeature = new featureClasses[featureType](this);
-        // 要素进入待编辑模式
+        // 新要素进入待编辑模式
         this.drawingFeature.waiting(register);
     }
 
@@ -114,7 +125,7 @@ class Editor extends Evented{
         // 渲染已有要素，按照面、线、点的顺序绘制
         const featureTypes = [FeatureType.POLYGON, FeatureType.LINE, FeatureType.POINT];
         featureTypes.forEach(featureType => {
-            if (featureType !== FeatureType.LINE) {
+            if (featureType === FeatureType.POLYGON) {
                 return;
             }
 

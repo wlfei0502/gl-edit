@@ -88,7 +88,7 @@ const Leaflet = Renderer.extend({
         });
 
         // 纹理加载完成
-        this._editor.on('textured', (feature) => {
+        this._editor.on('load', () => {
             this.fire('load');
         });
 

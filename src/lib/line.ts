@@ -13,7 +13,7 @@ const DEFAULT_INFO = {
     lngLats: [], 
     style: {
         width: 3,
-        color: [255, 0, 0, 255]
+        color: [26, 255, 255, 255]
     }
 }
 
@@ -110,7 +110,7 @@ class Line extends Shape{
             }
 
             lngLats[len - 1] = lngLat;
-            
+
             // 重绘
             this.editor.repaint();
         }

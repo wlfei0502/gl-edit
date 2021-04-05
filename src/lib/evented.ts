@@ -148,7 +148,7 @@ class Evented {
      * @param type 事件类型
      * @param data 事件数据
      */
-    fire (type, data) {
+    fire (type, data?:any) {
         if (!this.listens(type)) { return this;}
 
         if (this._events) {
