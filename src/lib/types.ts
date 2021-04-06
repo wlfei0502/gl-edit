@@ -58,12 +58,17 @@ export interface getModelMatrix {
     (): number[],
 }
 
+export interface isInBounds {
+    (lngLat: LngLat): boolean
+}
+
 /**
  * 图形配置信息
  */
 export interface ShapeConfig {
     lngLatToPix,
     getModelMatrix,
+    isInBounds,
     mapContainer: HTMLElement
 }
 

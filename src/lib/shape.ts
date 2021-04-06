@@ -34,10 +34,11 @@ class Shape extends Evented {
      * @param defaultInfo 
      */
     initFeatureInfo (featureInfo = {}, defaultInfo = {}) {
-        const { id, style, lngLats } = deepMerge(defaultInfo, featureInfo, []);
+        const defaultInfoClone = deepCopy(defaultInfo);
+        const { id, style, lngLats } = deepMerge(defaultInfoClone, featureInfo, []);
         this.id = id === '0'? generateUUID(): id;
-        this.lngLats = deepCopy(lngLats);
-        this.style = deepCopy(style);
+        this.lngLats = lngLats;
+        this.style = style;
     }
 
     /**
@@ -54,6 +55,20 @@ class Shape extends Evented {
      * 重新根据经纬度计算屏幕坐标，重绘图形
      */
     repaint () {}
+
+    /**
+     * 改变图形坐标
+     * @param lngLats 地理坐标
+     * @param isRepaint 是否需要重绘
+     */
+    setLngLats (lngLats:LngLat | LngLat[], isRepaint:boolean = false) {
+        this.lngLats = deepCopy(lngLats);
+        if (isRepaint) this.editor.repaint();
+    }
+
+    getId () {
+        return this.id;
+    }
 
     /**
      * 经纬度转屏幕像素坐标

@@ -68,18 +68,6 @@ export const buffer = {
 }
 
 /**
-* 经纬度转成像素函数
-* @param {*} callback 经纬度转成像素函数
-*/
-export function lngLatToPoint(callback){
-    return (lngLat) => {
-        const { x, y } = callback(lngLat);
-        // 对本身的变换加上平移值才是最后的变换结果
-        return [ x, y ];
-    }
-}
-
-/**
  * 去除首尾空格
  * @param {*} str 
  */
@@ -219,7 +207,6 @@ export function isPlainObject(obj){
 /**
  * Get the first item that pass the test
  * by second argument function
- *
  * @param {Array} list
  * @param {Function} f
  * @return {*}
@@ -229,16 +216,12 @@ export function find(list, f) {
 }
 
 /**
- * Deep copy the given object considering circular structure.
- * This function caches all nested objects and its copies.
- * If it detects circular structure, use cached copy to avoid infinite loop.
- *
+ * 深拷贝
  * @param {*} obj
- * @param {Array<Object>} cache
+ * @param {Array<Object>} cache 防止循环引用
  * @return {*}
  */
 export function deepCopy(obj, cache = []) {
-    // just return if obj is immutable value
     if (obj === null || typeof obj !== 'object') {
         return obj
     }
@@ -250,8 +233,7 @@ export function deepCopy(obj, cache = []) {
     }
 
     const copy = Array.isArray(obj) ? [] : {}
-    // put the copy into cache at first
-    // because we want to refer it in recursive deepCopy
+
     cache.push({
         original: obj,
         copy

@@ -13,6 +13,7 @@
   "license": "ISC",
   "dependencies": {
     "earcut": "^2.2.2",
+    "gl-matrix": "^3.3.0",
     "leaflet": "^1.7.1",
     "regl": "^2.1.0"
   },

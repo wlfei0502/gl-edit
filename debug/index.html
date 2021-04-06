@@ -101,13 +101,13 @@
         const latMin = 39.939224840791965;
         const latMax = 40.242846824049785;
 
-        const lngStep = (116.72218322753908 - 115.84327697753908)/500;
-        const latStep = (40.242846824049785 - 39.939224840791965)/500;
+        const lngStep = (116.72218322753908 - 115.84327697753908)/300;
+        const latStep = (40.242846824049785 - 39.939224840791965)/300;
 
         const polygons = [];
 
-        for (let g = 0; g < 0; g++) {
-            for (let t = 0; t < 0; t++) {
+        for (let g = 0; g < 10; g++) {
+            for (let t = 0; t < 10; t++) {
                 const lt = { lng:lngMin + g*lngStep, lat:latMax - t*latStep };
                 const rt = { lng:lngMin + (g+1)*lngStep, lat:latMax - t*latStep };
                 const rb = { lng:lngMin + (g+1)*lngStep, lat:latMax - (t+1)*latStep };
@@ -119,9 +119,9 @@
         }
 
         drawEditLayer.on('load', () => {
-            // drawEditLayer.render({
-            //     polygon:polygons
-            // });
+            drawEditLayer.render({
+                polygon:polygons
+            });
 
             // mymap.on('moveend', () => {
             //     drawEditLayer.render({

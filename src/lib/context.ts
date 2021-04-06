@@ -20,13 +20,16 @@ const cursors = {
  * 图形绘制上下文，用来管理图形编辑的全局状态
  */
 class Context extends Evented{
+    // 当前webgl上下文
+    gl: WebGLRenderingContext;
     // 当前所处的编辑模式：空闲|标点|标线|标面|选中
     mode: string = Modes.IDLE;
-    // 记录地图当前所处的状态，用来处理地图移动过程中不触发拾取动作
-    mapStatus: string = '';
+    // 是否悬浮选中
+    isHover: boolean = false;
 
     constructor({ gl }) {
         super();
+        this.gl = gl;
     }
 
     /**
@@ -41,12 +44,25 @@ class Context extends Evented{
         this.mode = Modes.IDLE;
     }
 
-    /**
-     * 地图操作状态
-     * @param mapStatus 
-     */
-    setMapStatus (mapStatus) {
-        this.mapStatus = mapStatus;
+    hover (type, isHover) {
+        const cursor = cursors[type];
+
+        if (!cursor) {
+            (this.gl.canvas as HTMLElement).style.cursor = 'inherit';
+            return;
+        }
+
+        this.isHover = isHover;
+        (this.gl.canvas as HTMLElement).style.cursor = `url(${cursor}) 9 9,auto`;
+    }
+
+    out () {
+        if (!this.isHover) {
+            return;
+        }
+
+        this.isHover = false;
+        (this.gl.canvas as HTMLElement).style.cursor = 'inherit';
     }
 }
 

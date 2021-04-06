@@ -1,5 +1,4 @@
 import L from 'leaflet';
-import { lngLatToPoint } from '../util/util';
 import Editor from './editor';
 
 const { 
@@ -19,6 +18,7 @@ const Leaflet = Renderer.extend({
      * 鼠标移动事件
      */
     moveFn: null,
+
     getEvents: function () {
         var events = Renderer.prototype.getEvents.call(this);
         // 鼠标拖动实时绘制
@@ -225,9 +225,6 @@ const Leaflet = Renderer.extend({
     },
 
     _movestart () {
-        if (this._editor) {
-            this._editor.context.setMapStatus('movestart');
-        }
     },
 
     _onMouseMove: function (e) {
