@@ -21,6 +21,8 @@ class Shape extends Evented {
     positionBuffer: REGL.Buffer;
     // 顶点索引
     elements: REGL.Elements;
+    // 要素被选中的缓冲区
+    bufferSelected: any;
 
     constructor (editor:Editor, featureInfo?:any, defaultInfo?:any) {
         super ();
@@ -64,6 +66,25 @@ class Shape extends Evented {
     setLngLats (lngLats:LngLat | LngLat[], isRepaint:boolean = false) {
         this.lngLats = deepCopy(lngLats);
         if (isRepaint) this.editor.repaint();
+    }
+
+    setId (id) {
+        // TODO:目前只针对新标绘的要素进行id重设
+        if (this.id.indexOf('id_') === -1) {
+            return;
+        }
+
+        const ids = this.id.split('_');
+
+        let suffix = '_';
+
+        if (ids.length > 2) {
+            suffix = suffix + ids.slice(2).join('_');
+        } else {
+            suffix = '';
+        }
+
+        this.id = `${id}${suffix}`;
     }
 
     getId () {

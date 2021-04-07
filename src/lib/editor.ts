@@ -26,20 +26,15 @@ const featureClasses = {
     [FeatureType.POINT]: Point,
 };
 
+/**
+ * 编辑器类，
+ * TODO:后期如果性能不佳，需要考虑将坐标进行视野内裁切，做接边处理
+ */
 class Editor extends Evented{
     // 该配置主要是为了适配不同的地图API
     config: ShapeConfig;
     // 环境上下文
     context: Context;
-    // 绘制完成的缓冲区
-    bufferPixes: number = 3;
-    // 线，面要素被选中的缓冲区大小
-    bufferSelected: number = 6;
-    // 点要素被选中的缓冲区
-    bufferPointSelected = {
-        w: 14,
-        h: 42
-    };
     // webgl绘制实例
     regl: REGL.Regl;
     // 绘制图形的命令
@@ -117,8 +112,8 @@ class Editor extends Evented{
         const { clientX, clientY } = evt;
 
         this.downPix = {
-            x:clientX,
-            y:clientY
+            x: clientX,
+            y: clientY
         }
     }
 
@@ -132,8 +127,8 @@ class Editor extends Evented{
         const { clientX, clientY } = evt;
 
         this.upPix = {
-            x:clientX,
-            y:clientY
+            x: clientX,
+            y: clientY
         }
     }
 
@@ -156,7 +151,12 @@ class Editor extends Evented{
 
         const feature = this.pickFeature (event);
 
-        console.log(feature);
+        if (feature) {
+            this.fire('picked:click', {
+                type: 'click',
+                feature
+            });
+        }
     }
 
     /**
@@ -442,6 +442,23 @@ class Editor extends Evented{
         features.push(feature);
     }
 
+    changeIds (ids = {}) {
+        // TODO：修改节点绑定的attachIds
+        Object.keys(ids).forEach(oldId => {
+            const newId = ids[oldId];
+            Object.keys(this.features).forEach(featureType => {
+                const features = this.features[featureType];
+                const feature = features.find(feature => {
+                    return feature.id.indexOf(oldId) > -1;
+                });
+
+                if (feature) {
+                    feature.setId(newId);
+                }
+            });
+        });
+    }
+
     /**
      * 经纬度转屏幕像素坐标
      * @param lngLat 
@@ -456,10 +473,6 @@ class Editor extends Evented{
      */
     getModelMatrix (): number[] {
         return this.config.getModelMatrix ();
-    }
-
-    isInBounds (lngLat):boolean {
-        return this.config.isInBounds(lngLat);
     }
 
     /**

@@ -1,8 +1,16 @@
-import { subtract, dot, create, equals, negate, length, normalize, scale } from 'gl-matrix/vec2';
+import { subtract, dot, create, equals, negate, length, normalize, scale, cross } from 'gl-matrix/vec2';
 
 import Editor from "./editor";
 import Shape from "./shape";
 import { Features, FeatureType, LngLat, Pix } from "./types";
+
+function flipY(pix:Pix):Pix {
+    return {
+        x: pix.x,
+        y: -pix.y
+    }
+}
+
 
 /**
  * 计算两点之间的像素差
@@ -21,8 +29,10 @@ function onPoint(target:LngLat, pix:Pix, editor:Editor):{} {
         };
     }
 
-    const w = Math.abs(pix1.x - pix.x);
-    const h = pix.y - pix1.y;
+    const ratio = window.devicePixelRatio;
+
+    const w = Math.abs(pix1.x - pix.x) * ratio;
+    const h = Math.abs(pix.y - pix1.y) * ratio;
 
     return {
         w,
@@ -45,25 +55,27 @@ function onLine(target:LngLat[], pix:Pix, editor:Editor):number {
 
     const len = pixes.length;
 
+    pix = flipY(pix);
+
     // 创建一个0向量
-    const vec0 = create();
+    const zero = create();
 
     for (let p = 0; p < len; p++) {
-        const currentPix = pixes[p];
+        const currentPix = flipY(pixes[p]);
         const nextIndex = p + 1;
 
         if (nextIndex >= len) {
             break;
         }
 
-        const nextPix = pixes[nextIndex];
+        const nextPix = flipY(pixes[nextIndex]);
 
         // currentPix 与 nextPix组成一条线段，求点到线上的距离
         // 线段向量
         const vec1 = subtract([], [nextPix.x, nextPix.y], [currentPix.x, currentPix.y]);
 
         // 线段两端点距离太近，认为是一个点
-        if (equals(vec0, vec1)) {
+        if (equals(zero, vec1)) {
             continue;
         }
 
@@ -109,13 +121,77 @@ function onLine(target:LngLat[], pix:Pix, editor:Editor):number {
 }
 
 /**
- * 在多边形面上
+ * 在多边形面上，y = pix.y 与 面做相交，判断 x = pix.x 左侧的交点个数是否为奇数
  */
-function onPolygon(target:LngLat[], pix:Pix, editor:Editor) {
-    
+function onPolygon(target:LngLat[], pix:Pix, editor:Editor):boolean {
+    const pixes = target.map(lngLat => {
+        return editor.lngLatToPix(lngLat);
+    });
+
+    pix = flipY(pix);
+
+    // 记录左侧交点个数
+    let leftCrossCount = 0;
+
+    const len = pixes.length;
+
+    const zero = create();
+
+    for (let p = 0; p < len; p++) {
+        const currentPix = flipY(pixes[p]);
+        const nextIndex = p + 1;
+
+        // 已达到最后一个点
+        if (nextIndex >= len) {
+            break;
+        }
+        
+        // 去除面上的点与鼠标所在位置的点处于同一水平线的情况，防止首尾重复计数两次
+        if (currentPix.y === pix.y) {
+            continue;
+        }
+
+        // 下一个点
+        const nextPix = flipY(pixes[nextIndex]);
+        const currentToNextVec = [nextPix.x - currentPix.x, nextPix.y - currentPix.y];
+
+        if (equals(zero, currentToNextVec)) {
+            continue;
+        }
+
+        // 判断pix是否在线段之间，如果在，说明y = pix.y 与线段相交
+        const isPositive = (pix.y - currentPix.y) * (pix.y - nextPix.y);
+
+        // 该线段的两个端点在y = pix.y的同侧
+        if (isPositive > 0) {
+            continue;    
+        }
+
+        // 统计在pix左侧的交点个数
+        // 逆时针, 遵循右手螺旋定则，anticlockwise < 0
+        const anticlockwise = currentToNextVec[1];
+        // 线段向量 a-b 
+        //  a ----> b
+        //   ↘ p
+        // a-p向量
+        const currentToPixVec = [pix.x - currentPix.x, pix.y - currentPix.y];
+        const crossVec3 = cross([], currentToPixVec, currentToNextVec);
+
+        // 向量方向标识与向量的模同号，即为左侧交点
+        if (anticlockwise * crossVec3[2] > 0) {
+            leftCrossCount++;
+        }
+    }
+
+    // 奇数
+    if (leftCrossCount % 2 === 1) {
+        return true;
+    } else {
+        return false;
+    }
 }
 
-const distanceFns = {
+const onFeatureFns = {
     [FeatureType.POINT]: onPoint,
     [FeatureType.LINE]: onLine,
     [FeatureType.POLYGON]: onPolygon,
@@ -126,25 +202,28 @@ export function pick(features:Features, pix:Pix, editor:Editor):Shape {
 
     for (const featureType of featureTypes) {
         const shapeFeatures = features[featureType] as Shape[];
-        const distanceFn = distanceFns[featureType];
+        const onFeatureFn = onFeatureFns[featureType];
 
         for (const feature of shapeFeatures) {
             const { lngLats } = feature;
-            const distance = distanceFn(lngLats, pix, editor);
+            const result = onFeatureFn(lngLats, pix, editor);
 
             // 点的缓存是纹理方形
             if (featureType === FeatureType.POINT) {
-                if (distance.w < editor.bufferPointSelected.w
-                     && distance.h < editor.bufferPointSelected.h) {
+                if (result.w < feature.bufferSelected.w
+                     && result.h < feature.bufferSelected.h) {
                     return feature;
                 }
             } else if (featureType === FeatureType.LINE) {
-                // 线、面被选中
-                if (distance <= editor.bufferSelected) {
+                // 点在线上
+                if (result <= feature.bufferSelected) {
                     return feature;
                 }
             } else if (featureType === FeatureType.POLYGON) {
-                
+                // 点在面上
+                if (result) {
+                    return feature;
+                }
             }
         }
     }

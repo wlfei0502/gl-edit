@@ -58,7 +58,7 @@ const Leaflet = Renderer.extend({
         this._editor = new Editor(this.gl, {
             lngLatToPix: this.lngLatToPoint.bind(this),
             getModelMatrix: this.getModelMatrix.bind(this),
-            mapContainer: mapContainer
+            mapContainer: mapContainer,
         });
 
         // 拾取事件

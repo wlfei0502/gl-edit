@@ -20,6 +20,10 @@ const IMG_WIDTH = 512, IMG_HEIGHT = 128;
 class Point extends Shape {
     texture: REGL.Texture;
     texCoordBuffer: REGL.Buffer;
+    bufferSelected = {
+        w: 14,
+        h: 42
+    }
 
     constructor (editor:Editor, featureInfo?:any) {
         super(editor, featureInfo, DEFAULT_INFO);

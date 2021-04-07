@@ -20,6 +20,10 @@ const DEFAULT_INFO = {
 class Line extends Shape{
     // 顶点向两侧偏移方向缓存
     offsetBuffer: REGL.Buffer;
+    // 要素被选中缓冲区
+    bufferSelected: number = 6;
+    // 绘制完成的缓冲区
+    bufferPixes: number = 3;
 
     constructor (editor:Editor, featureInfo?:any) {
         super (editor, featureInfo, DEFAULT_INFO);
@@ -61,7 +65,7 @@ class Line extends Shape{
      */
     waiting (register) {
         const lngLats = (this.lngLats as LngLat[]);
-        const { bufferPixes } = this.editor;
+        const { bufferPixes } = this;
 
         // 地图点击事件
         const mapClick = (lngLat: LngLat, drawFinish) => {

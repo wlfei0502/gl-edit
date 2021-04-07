@@ -65,7 +65,7 @@
         mymap.addLayer(drawEditLayer);
 
         // 拾取事件
-        drawEditLayer.on('picked:mousemove', (evt) => {
+        drawEditLayer.on('picked:click', (evt) => {
             console.log(evt, evt.feature.getId());
         });
 
@@ -119,9 +119,9 @@
         }
 
         drawEditLayer.on('load', () => {
-            drawEditLayer.render({
-                polygon:polygons
-            });
+            // drawEditLayer.render({
+            //     polygon:polygons
+            // });
 
             // mymap.on('moveend', () => {
             //     drawEditLayer.render({

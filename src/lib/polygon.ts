@@ -17,6 +17,8 @@ const DEFAULT_INFO = {
 class Polygon extends Shape {
     // 边框
     border: Line;
+    // 绘制完成的缓冲区
+    bufferPixes: number = 3;
 
     constructor (editor:Editor, featureInfo?:any) {
         super(editor, featureInfo, DEFAULT_INFO);
@@ -63,7 +65,8 @@ class Polygon extends Shape {
      * @param register 注册鼠标点击和移动
      */
      waiting (register) {
-        const { context, bufferPixes } = this.editor;
+        const { context } = this.editor;
+        const { bufferPixes } = this;
         const lngLats = this.lngLats as LngLat[];
 
         // 地图点击事件

@@ -10505,6 +10505,12 @@
     });
 
     var _a$1;
+    function flipY(pix) {
+        return {
+            x: pix.x,
+            y: -pix.y
+        };
+    }
     /**
      * 计算两点之间的像素差
      * @param target
@@ -10520,8 +10526,9 @@
                 h: Number.MAX_VALUE
             };
         }
-        var w = Math.abs(pix1.x - pix.x);
-        var h = pix.y - pix1.y;
+        var ratio = window.devicePixelRatio;
+        var w = Math.abs(pix1.x - pix.x) * ratio;
+        var h = Math.abs(pix.y - pix1.y) * ratio;
         return {
             w: w,
             h: h
@@ -10539,20 +10546,21 @@
             return editor.lngLatToPix(lngLat);
         });
         var len = pixes.length;
+        pix = flipY(pix);
         // 创建一个0向量
-        var vec0 = vec2.create();
+        var zero = vec2.create();
         for (var p = 0; p < len; p++) {
-            var currentPix = pixes[p];
+            var currentPix = flipY(pixes[p]);
             var nextIndex = p + 1;
             if (nextIndex >= len) {
                 break;
             }
-            var nextPix = pixes[nextIndex];
+            var nextPix = flipY(pixes[nextIndex]);
             // currentPix 与 nextPix组成一条线段，求点到线上的距离
             // 线段向量
             var vec1 = vec2.subtract([], [nextPix.x, nextPix.y], [currentPix.x, currentPix.y]);
             // 线段两端点距离太近，认为是一个点
-            if (vec2.equals(vec0, vec1)) {
+            if (vec2.equals(zero, vec1)) {
                 continue;
             }
             // 线段首端点与目标点组成的向量
@@ -10586,11 +10594,63 @@
         return minDistance;
     }
     /**
-     * 在多边形面上
+     * 在多边形面上，y = pix.y 与 面做相交，判断 x = pix.x 左侧的交点个数是否为奇数
      */
     function onPolygon(target, pix, editor) {
+        var pixes = target.map(function (lngLat) {
+            return editor.lngLatToPix(lngLat);
+        });
+        pix = flipY(pix);
+        // 记录左侧交点个数
+        var leftCrossCount = 0;
+        var len = pixes.length;
+        var zero = vec2.create();
+        for (var p = 0; p < len; p++) {
+            var currentPix = flipY(pixes[p]);
+            var nextIndex = p + 1;
+            // 已达到最后一个点
+            if (nextIndex >= len) {
+                break;
+            }
+            // 去除面上的点与鼠标所在位置的点处于同一水平线的情况，防止首尾重复计数两次
+            if (currentPix.y === pix.y) {
+                continue;
+            }
+            // 下一个点
+            var nextPix = flipY(pixes[nextIndex]);
+            var currentToNextVec = [nextPix.x - currentPix.x, nextPix.y - currentPix.y];
+            if (vec2.equals(zero, currentToNextVec)) {
+                continue;
+            }
+            // 判断pix是否在线段之间，如果在，说明y = pix.y 与线段相交
+            var isPositive = (pix.y - currentPix.y) * (pix.y - nextPix.y);
+            // 该线段的两个端点在y = pix.y的同侧
+            if (isPositive > 0) {
+                continue;
+            }
+            // 统计在pix左侧的交点个数
+            // 逆时针, 遵循右手螺旋定则，anticlockwise < 0
+            var anticlockwise = currentToNextVec[1];
+            // 线段向量 a-b 
+            //  a ----> b
+            //   ↘ p
+            // a-p向量
+            var currentToPixVec = [pix.x - currentPix.x, pix.y - currentPix.y];
+            var crossVec3 = vec2.cross([], currentToPixVec, currentToNextVec);
+            // 向量方向标识与向量的模同号，即为左侧交点
+            if (anticlockwise * crossVec3[2] > 0) {
+                leftCrossCount++;
+            }
+        }
+        // 奇数
+        if (leftCrossCount % 2 === 1) {
+            return true;
+        }
+        else {
+            return false;
+        }
     }
-    var distanceFns = (_a$1 = {},
+    var onFeatureFns = (_a$1 = {},
         _a$1[FeatureType.POINT] = onPoint,
         _a$1[FeatureType.LINE] = onLine,
         _a$1[FeatureType.POLYGON] = onPolygon,
@@ -10600,25 +10660,30 @@
         for (var _i = 0, featureTypes_1 = featureTypes; _i < featureTypes_1.length; _i++) {
             var featureType = featureTypes_1[_i];
             var shapeFeatures = features[featureType];
-            var distanceFn = distanceFns[featureType];
+            var onFeatureFn = onFeatureFns[featureType];
             for (var _a = 0, shapeFeatures_1 = shapeFeatures; _a < shapeFeatures_1.length; _a++) {
                 var feature = shapeFeatures_1[_a];
                 var lngLats = feature.lngLats;
-                var distance = distanceFn(lngLats, pix, editor);
+                var result = onFeatureFn(lngLats, pix, editor);
                 // 点的缓存是纹理方形
                 if (featureType === FeatureType.POINT) {
-                    if (distance.w < editor.bufferPointSelected.w
-                        && distance.h < editor.bufferPointSelected.h) {
+                    if (result.w < feature.bufferSelected.w
+                        && result.h < feature.bufferSelected.h) {
                         return feature;
                     }
                 }
                 else if (featureType === FeatureType.LINE) {
-                    // 线、面被选中
-                    if (distance <= editor.bufferSelected) {
+                    // 点在线上
+                    if (result <= feature.bufferSelected) {
                         return feature;
                     }
                 }
-                else if (featureType === FeatureType.POLYGON) ;
+                else if (featureType === FeatureType.POLYGON) {
+                    // 点在面上
+                    if (result) {
+                        return feature;
+                    }
+                }
             }
         }
         return null;
@@ -10669,6 +10734,21 @@
             if (isRepaint)
                 this.editor.repaint();
         };
+        Shape.prototype.setId = function (id) {
+            // TODO:目前只针对新标绘的要素进行id重设
+            if (this.id.indexOf('id_') === -1) {
+                return;
+            }
+            var ids = this.id.split('_');
+            var suffix = '_';
+            if (ids.length > 2) {
+                suffix = suffix + ids.slice(2).join('_');
+            }
+            else {
+                suffix = '';
+            }
+            this.id = "" + id + suffix;
+        };
         Shape.prototype.getId = function () {
             return this.id;
         };
@@ -10712,6 +10792,10 @@
         __extends(Line, _super);
         function Line(editor, featureInfo) {
             var _this = _super.call(this, editor, featureInfo, DEFAULT_INFO) || this;
+            // 要素被选中缓冲区
+            _this.bufferSelected = 6;
+            // 绘制完成的缓冲区
+            _this.bufferPixes = 3;
             _this.featureType = FeatureType.LINE;
             // 初始化绘制线需要的buffer和element
             _this.initDraw();
@@ -10745,7 +10829,7 @@
         Line.prototype.waiting = function (register) {
             var _this = this;
             var lngLats = this.lngLats;
-            var bufferPixes = this.editor.bufferPixes;
+            var bufferPixes = this.bufferPixes;
             // 地图点击事件
             var mapClick = function (lngLat, drawFinish) {
                 var len = lngLats.length;
@@ -10867,6 +10951,10 @@
         __extends(Point, _super);
         function Point(editor, featureInfo) {
             var _this = _super.call(this, editor, featureInfo, DEFAULT_INFO$1) || this;
+            _this.bufferSelected = {
+                w: 14,
+                h: 42
+            };
             _this.featureType = FeatureType.POINT;
             // 初始化绘制配置
             _this.initDraw();
@@ -11650,6 +11738,8 @@
         __extends(Polygon, _super);
         function Polygon(editor, featureInfo) {
             var _this = _super.call(this, editor, featureInfo, DEFAULT_INFO$2) || this;
+            // 绘制完成的缓冲区
+            _this.bufferPixes = 3;
             _this.featureType = FeatureType.POLYGON;
             _this.initDraw();
             _this.createBorder(editor);
@@ -11688,7 +11778,8 @@
          */
         Polygon.prototype.waiting = function (register) {
             var _this = this;
-            var _a = this.editor, context = _a.context, bufferPixes = _a.bufferPixes;
+            var context = this.editor.context;
+            var bufferPixes = this.bufferPixes;
             var lngLats = this.lngLats;
             // 地图点击事件
             var mapClick = function (lngLat, drawFinish) {
@@ -11787,19 +11878,14 @@
         _a$2[FeatureType.NODE] = Node,
         _a$2[FeatureType.POINT] = Point,
         _a$2);
+    /**
+     * 编辑器类，
+     * TODO:后期如果性能不佳，需要考虑将坐标进行视野内裁切，做接边处理
+     */
     var Editor = /** @class */ (function (_super) {
         __extends(Editor, _super);
         function Editor(gl, config) {
             var _this = _super.call(this) || this;
-            // 绘制完成的缓冲区
-            _this.bufferPixes = 3;
-            // 线，面要素被选中的缓冲区大小
-            _this.bufferSelected = 6;
-            // 点要素被选中的缓冲区
-            _this.bufferPointSelected = {
-                w: 14,
-                h: 42
-            };
             // 是否需要重新设置webgl的viewport，解决改变地图容器的大小，引起坐标偏移的问题
             _this.isRefresh = false;
             // 生成环境上下文，主要处理一些全局上的
@@ -11888,7 +11974,12 @@
                 return;
             }
             var feature = this.pickFeature(event);
-            console.log(feature);
+            if (feature) {
+                this.fire('picked:click', {
+                    type: 'click',
+                    feature: feature
+                });
+            }
         };
         /**
          * 鼠标悬浮拾取要素
@@ -12135,6 +12226,23 @@
             }
             features.push(feature);
         };
+        Editor.prototype.changeIds = function (ids) {
+            var _this = this;
+            if (ids === void 0) { ids = {}; }
+            // TODO：修改节点绑定的attachIds
+            Object.keys(ids).forEach(function (oldId) {
+                var newId = ids[oldId];
+                Object.keys(_this.features).forEach(function (featureType) {
+                    var features = _this.features[featureType];
+                    var feature = features.find(function (feature) {
+                        return feature.id.indexOf(oldId) > -1;
+                    });
+                    if (feature) {
+                        feature.setId(newId);
+                    }
+                });
+            });
+        };
         /**
          * 经纬度转屏幕像素坐标
          * @param lngLat
@@ -12148,9 +12256,6 @@
          */
         Editor.prototype.getModelMatrix = function () {
             return this.config.getModelMatrix();
-        };
-        Editor.prototype.isInBounds = function (lngLat) {
-            return this.config.isInBounds(lngLat);
         };
         /**
          * 重置编辑器初始值, 清空画布
