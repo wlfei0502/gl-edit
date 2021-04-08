@@ -9,7 +9,7 @@ import json from '@rollup/plugin-json';
 import { uglify } from 'rollup-plugin-uglify';
 
 export default {
-    input: 'src/index.ts',
+    input: 'src/index.js',
     output: {
         file: 'dist/gl-edit.min.js',
         format: 'umd',

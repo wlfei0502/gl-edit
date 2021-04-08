@@ -182,9 +182,13 @@ class Editor extends Evented{
         const evt = event as PointerEvent;
         const { clientX, clientY } = evt;
 
+        const { mapContainer } = this.config;
+
+        const { left, top } = mapContainer.getBoundingClientRect();
+
         const pix = {
-            x:clientX,
-            y:clientY
+            x: clientX - left,
+            y: clientY - top
         }
 
         const feature = pick(this.features, pix, this);
